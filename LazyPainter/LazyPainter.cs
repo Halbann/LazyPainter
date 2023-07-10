@@ -41,6 +41,7 @@ namespace LazyPainter
         private static GUIStyle squareButtonStyle;
         private static GUIStyle colourSlotStyle;
         private static GUIStyle buttonStyle;
+        private static GUIStyle textBoxStyle;
         private static bool showPresetColours = false;
         private static int groupIndex = 0;
         private static string groupName = "FULL";
@@ -155,6 +156,14 @@ namespace LazyPainter
         void Selection()
         {
             // todo: throw this all out.
+
+            if (Input.GetKeyDown(KeyCode.A) && Input.GetKey(KeyCode.LeftControl))
+            {
+                selectedParts.Clear();
+                selectedParts.AddRange(PartsList);
+                UpdateHighlighting();
+                UpdateSwitchers();
+            }
 
             if (!(Input.GetMouseButtonUp(0) && !windowRect.Contains(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y))))
                 return;
@@ -514,16 +523,13 @@ namespace LazyPainter
             preset.name = preset.title.Replace(" ", "").ToLower();
 
             RecoloringDataPresetGroup customGroup = PresetColor.getGroupList().Find(g => g.name == "Custom");
+
             if (customGroup == null)
-            {
-                customGroup = new RecoloringDataPresetGroup("Custom");
-                customGroup.colors = new List<RecoloringDataPreset>();
-                PresetColor.getGroupList().Add(customGroup);
-            }
+                AddCustomGroup();
 
             var group = customGroup.colors;
             int index;
-            if ((index = group.FindIndex(p => p.title == name)) != -1)
+            if ((index = group.FindIndex(p => p.name == preset.name)) != -1)
             {
                 group[index] = preset;
             }
@@ -617,6 +623,17 @@ namespace LazyPainter
                 groupsNode.values.Remove(groupsNode.values[index]);
 
             file.Save(filePath);
+        }
+
+        void AddCustomGroup()
+        {
+            RecoloringDataPresetGroup customGroup = new RecoloringDataPresetGroup("Custom");
+            customGroup.colors = new List<RecoloringDataPreset>();
+            PresetColor.getGroupList().Add(customGroup);
+
+            var groupsField = typeof(PresetColor).GetField("presetGroups", BindingFlags.Static | BindingFlags.NonPublic);
+            var presetGroups = (Dictionary<string, RecoloringDataPresetGroup>)groupsField.GetValue(null);
+            presetGroups.Add("Custom", customGroup);
         }
 
         #endregion
@@ -856,11 +873,11 @@ namespace LazyPainter
                     "\n\n<b>Control click</b> a part to select all parts of that type. " +
                     "\n\n<b>Shift click</b> to add more parts to the selection. " +
                     "\n\n<b>Control alt click</b> a part to select all parts that share the same primary colour. " +
+                    "\n\nPress <b>control + A</b> to select all parts. " +
                     "\n\nClick anywhere to clear the selection. " +
                     "\n\n<b>Alt click</b> a part to copy its colours to the palette. " +
                     "\n\nClick <b>'Paint'</b> to activate recolouring for the selected parts. " +
-                    "\n\nRight click a colour slot to enable/disable it." +
-                    "\n\n<b>Alt click</b> a colour preset to delete it.");
+                    "\n\nRight click a colour slot to enable/disable it.");
                 GUILayout.EndVertical();
                 GUILayout.EndVertical();
             }
@@ -904,6 +921,9 @@ namespace LazyPainter
             colourSlotStyle = new GUIStyle(GUI.skin.button);
             colourSlotStyle.fontSize = 400;
             colourSlotStyle.alignment = TextAnchor.MiddleCenter;
+
+            textBoxStyle = new GUIStyle(GUI.skin.textField);
+            textBoxStyle.alignment = TextAnchor.MiddleCenter;
         }
 
         private void UpdateColourBoxes()
@@ -914,18 +934,28 @@ namespace LazyPainter
                 colourTextures[i].Apply();
             }
         }
-        
+
         void SliderSetting(string name, ref float setting, float min, float max, int rounding, ref bool update)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(name);
-            GUILayout.FlexibleSpace();
+            GUILayout.Space(3);
+            GUILayout.Label(name, GUILayout.Width(70));
 
             float old = setting;
-            setting = (float)Math.Round(GUILayout.HorizontalSlider(setting, min, max, GUILayout.Width(windowWidth / 2)), rounding);
+
+            // Slider
+            setting = (float)Math.Round(GUILayout.HorizontalSlider(setting, min, max), rounding);
+
+            // Box
+            string text = GUILayout.TextField(setting.ToString(), textBoxStyle, GUILayout.Width(windowWidth / 8));
+            if (float.TryParse(text, out float result))
+                setting = result;
+            else if (text == "")
+                setting = 0;
+
             update = update || (old != setting);
 
-            GUILayout.Label(setting.ToString(), GUILayout.Width(windowWidth / 8));
+            GUILayout.Space(3);
             GUILayout.EndHorizontal();
         }
 
@@ -1094,6 +1124,10 @@ namespace LazyPainter
                 part.mpb.SetFloat(PropertyIDs._RimFalloff, rimFallOff);
                 part.GetPartRenderers().ToList().ForEach(r => r.SetPropertyBlock(part.mpb));
             }
+
+            // check if the custom group exists
+            if (!PresetColor.getGroupList().Exists(x => x.name == "Custom"))
+                AddCustomGroup();
 
             guiEnabled = true;
         }
