@@ -41,6 +41,7 @@
     </Reference>
     <Reference Include="TexturesUnlimited">
       <HintPath>G:\Games\Steam Library\steamapps\common\Kerbal Space Program\GameData\000_TexturesUnlimited\Plugins\TexturesUnlimited.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine">
       <HintPath>G:\Games\Steam Library\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\UnityEngine.dll</HintPath>
@@ -48,6 +49,7 @@
     </Reference>
     <Reference Include="UnityEngine.AnimationModule">
       <HintPath>G:\Games\Steam Library\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>G:\Games\Steam Library\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
@@ -55,12 +57,15 @@
     </Reference>
     <Reference Include="UnityEngine.IMGUIModule">
       <HintPath>G:\Games\Steam Library\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
       <HintPath>G:\Games\Steam Library\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
       <HintPath>G:\Games\Steam Library\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>G:\Games\Steam Library\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\UnityEngine.UI.dll</HintPath>

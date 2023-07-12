@@ -76,7 +76,7 @@ namespace LazyPainter
         // Colour settings.
         private float[] speculars = { 127, 127, 127 };
         private float[] metals = { 0, 0, 0 };
-        private float[] details = { 0, 0, 0 };
+        private float[] details = { 100, 100, 100 };
 
         private float[][] coloursHSV = new float[][]
         {
@@ -96,12 +96,13 @@ namespace LazyPainter
 
         // Parts.
         private List<RecolourablePartModule> switchers = new List<RecolourablePartModule>();
-        private Dictionary<string, string> cache = new Dictionary<string, string> { };
+        internal static Dictionary<string, string> cache = new Dictionary<string, string> { };
         private List<Part> PartsList => HighLogic.LoadedSceneIsEditor ? EditorLogic.SortedShipList : FlightGlobals.ActiveVessel.Parts;
         private List<Part> selectedParts = new List<Part>();
         internal static FieldInfo textureSetsField = typeof(KSPTextureSwitch).GetField("textureSets", BindingFlags.Instance | BindingFlags.NonPublic);
         private List<Part> texturedParts = new List<Part>();
-        
+
+        public string[] textureWords = new string[] { "mwnn", "paint", "recolour" }; 
 
         #endregion
 
@@ -221,20 +222,15 @@ namespace LazyPainter
 
                 RecoloringData[] matchColour = recolourablePartModule.GetSectionColors();   
 
-                // Control alt click on an already selected part, remove all parts with the same name
+                // Control alt click on an already selected part, remove all parts with the same colour.
                 if (selectedParts.Contains(hoveredPart))
                 {
-                    //selectedParts.RemoveAll(p => p.name == hoveredPart.name);
-
-                    //List<Part> partsToRemove = new List<Part>();
                     var matching = switchers.FindAll(s => s.GetSectionColors()[0].IsEqual(matchColour[0]));
                     selectedParts = selectedParts.Except(matching.Select(m => m.part)).ToList();
                 }
-                // Control alt click on a new part, add all parts with the same name
+                // Control alt click on a new part, add all parts with the same colour.
                 else
                 {
-                    //selectedParts.AddRange(PartsList.FindAll(p => p.name == hoveredPart.name));
-                    //List<Part> matchingParts = new List<Part>();
                     RecolourablePartModule module;
 
                     foreach (Part p in PartsList)
@@ -247,8 +243,6 @@ namespace LazyPainter
                         if (partColour[0].IsEqual(matchColour[0]))
                             selectedParts.Add(p);
                     }
-
-                    //selectedParts.AddRange(PartsList.FindAll(p => GetRecolourableModule(p).GetSectionColors()[0].IsEqual(matchColour[0])));
                 }
 
                 UpdateHighlighting();
@@ -340,20 +334,20 @@ namespace LazyPainter
         void UpdateSwitchers()
         {
             switchers.Clear();
-            KSPTextureSwitch switcher;
-            TUPartVariant partVariant;
+
+            KSPTextureSwitch[] textureSwitchers;
+            TUPartVariant[] partVariants;
 
             foreach (var part in selectedParts)
             {
-                if (part.TryGetComponent(out switcher))
+                textureSwitchers = part.gameObject.GetComponents<KSPTextureSwitch>();
+                if (textureSwitchers.Length > 0)
                 {
-
-                    switchers.Add(new RecolourablePartModule(switcher));
-                    continue;
+                    switchers.AddRange(textureSwitchers.Select(s => new RecolourablePartModule(s)));
                 }
-                else if (part.TryGetComponent(out partVariant))
+                else if ((partVariants = part.gameObject.GetComponents<TUPartVariant>()).Length > 0)
                 {
-                    switchers.Add(new RecolourablePartModule(partVariant));
+                    switchers.AddRange(partVariants.Select(p => new RecolourablePartModule(p)));
                 }
             }
         }
@@ -378,14 +372,18 @@ namespace LazyPainter
             string partName;
             string[] foundTextures = new string[switchers.Count];
             string[] textureNames;
+            string nameLower;
 
             for (int i = 0; i < switchers.Count; i++)
             {
-                if (texturedParts.Contains(switchers[i].part))
+                nameLower = switchers[i].CurrentTexture.ToLower();
+                if (textureWords.Any(w => nameLower.Contains(w)))
                     continue;
 
                 textureName = "";
-                partName = switchers[i].part.partInfo.name;
+                partName = switchers[i].CurrentTexture;
+                if (partName == "")
+                    partName = switchers[i].part.name;
 
                 if (cache.TryGetValue(partName, out textureName))
                 {
@@ -398,7 +396,8 @@ namespace LazyPainter
 
                 foreach (var name in textureNames)
                 {
-                    if (name.ToLower().Contains("mwnn") || name.ToLower().Contains("paint"))
+                    nameLower = name.ToLower();
+                    if (textureWords.Any(w => nameLower.Contains(w)))
                     {
                         textureName = name;
                         break;
@@ -408,12 +407,13 @@ namespace LazyPainter
                 if (textureName == "" || textureName == null)
                     continue;
 
-                cache.Add(partName, textureName);
+                if (partName != "")
+                    cache.Add(partName, textureName);
+
                 foundTextures[i] = textureName;
             }
 
             Debug.Log("Finished looking for textures.");
-            //texturedParts.Clear();
 
             for (int i = 0; i < switchers.Count; i++)
             {
@@ -452,7 +452,7 @@ namespace LazyPainter
                     colours[i].color = HSV255toRGB(coloursHSV[c]);
                     colours[i].metallic = metals[c] / 255;
                     colours[i].specular = speculars[c] / 255;
-                    colours[i].detail = details[c] / 255;
+                    colours[i].detail = details[c] / 100;
                 }
 
                 switcher.SetSectionColors(colours);
@@ -487,14 +487,13 @@ namespace LazyPainter
 
             metals = colours.Select(c => c.metallic * 255).ToArray();
             speculars = colours.Select(c => c.specular * 255).ToArray();
-            details = colours.Select(c => c.detail * 255).ToArray();
+            details = colours.Select(c => c.detail * 100).ToArray();
             selectionState = new bool[] { 
                 true, 
                 !colours[0].IsEqual(colours[1]), 
                 !colours[1].IsEqual(colours[1]) && !colours[0].IsEqual(colours[2])
             };
 
-            //originalPart.highlighter.FlashingOn();
             StartCoroutine(HighlightPart(originalPart));
 
             UpdateColourBoxes();
@@ -1254,10 +1253,30 @@ namespace LazyPainter
                 return TextureSets.getTextureSetNames();
         }
 
+        //public void Disable()
+        //{
+        //    string current = CurrentTexture;
+        //    string old = LazyPainter.cache.FirstOrDefault(x => x.Value == current).Key;
+
+        //    if (old != null)
+        //    {
+        //        if (pv)
+        //            VariantsModule.SetVariant(old);
+        //        else
+        //            switcher.enableTextureSet(old, false, false);
+        //    }
+        //    else { 
+        //        if (pv)
+        //            VariantsModule.SetVariant(VariantsModule.GetVariantNames()[0]);
+        //        else
+        //            switcher.enableTextureSet(TextureSets.getTextureSetNames()[0], false, false);
+        //    }
+        //}
+
         public void Disable()
         {
             if (pv)
-                VariantsModule.SetVariant(VariantsModule.variantList[0].Name);
+                VariantsModule.SetVariant(VariantsModule.GetVariantNames()[0]);
             else
                 switcher.enableTextureSet(TextureSets.getTextureSetNames()[0], false, false);
         }
