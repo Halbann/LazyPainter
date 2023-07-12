@@ -100,7 +100,6 @@ namespace LazyPainter
         private List<Part> PartsList => HighLogic.LoadedSceneIsEditor ? EditorLogic.SortedShipList : FlightGlobals.ActiveVessel.Parts;
         private List<Part> selectedParts = new List<Part>();
         internal static FieldInfo textureSetsField = typeof(KSPTextureSwitch).GetField("textureSets", BindingFlags.Instance | BindingFlags.NonPublic);
-        private List<Part> texturedParts = new List<Part>();
 
         public string[] textureWords = new string[] { "mwnn", "paint", "recolour" }; 
 
@@ -363,8 +362,6 @@ namespace LazyPainter
                 foreach (RecolourablePartModule switcher in switchers)
                     switcher.Disable();
 
-                texturedParts = texturedParts.Except(switchers.Select(s => s.part)).ToList();
-
                 return;
             }
 
@@ -424,10 +421,7 @@ namespace LazyPainter
                     continue;
 
                 switchers[i].SetTexture(foundTextures[i]);
-                texturedParts.Add(switchers[i].part);
             }
-
-            texturedParts = texturedParts.Distinct().ToList();
 
             Debug.Log("Finished applying textures.");
 
