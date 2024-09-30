@@ -129,6 +129,15 @@ namespace LazyPainter
                 clickBlocker = ClickBlocker.Create(UIMasterController.Instance.mainCanvas, nameof(LazyPainter));
 
             GameEvents.onGameSceneLoadRequested.Add(OnSceneChange);
+            GameEvents.onEditorScreenChange.Add(OnEditorScreenChange);
+        }
+
+        private void OnEditorScreenChange(EditorScreen data)
+        {
+            if (data != EditorScreen.Parts)
+                appLauncherButton.gameObject.SetActive(false);
+            else
+                appLauncherButton.gameObject.SetActive(true);
         }
 
         private void OnSceneChange(GameScenes data)
@@ -165,6 +174,7 @@ namespace LazyPainter
             InputLockManager.RemoveControlLock("LazyPainterGUILock");
             InputLockManager.RemoveControlLock("LazyPainterScrollLock");
             GameEvents.onGameSceneLoadRequested.Remove(OnSceneChange);
+            GameEvents.onEditorScreenChange.Remove(OnEditorScreenChange);
 
             if (appLauncherButton)
                 ApplicationLauncher.Instance.RemoveModApplication(appLauncherButton);
@@ -1097,7 +1107,7 @@ namespace LazyPainter
 
             // Cause the parts list to slide out.
 
-            if (HighLogic.LoadedSceneIsEditor)
+            if (HighLogic.LoadedSceneIsEditor && EditorLogic.fetch.editorScreen == EditorScreen.Parts)
             {
                 EditorLogic.fetch.UpdateUI();
                 string stateType = locked ? "Out" : "In";
