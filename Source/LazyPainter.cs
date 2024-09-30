@@ -1,17 +1,15 @@
-﻿using System;
-using System.Linq;
+﻿using Highlighting;
+using KSP.UI;
+using KSP.UI.Screens;
+using KSPShaderTools;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
-
-using UnityEngine;
-using UnityEngine.UI;
-using Debug = UnityEngine.Debug;
-
-using KSPShaderTools;
-using KSP.UI.Screens;
-using Highlighting;
 using System.IO;
+using System.Linq;
+using System.Reflection;
+using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace LazyPainter
 {
@@ -21,19 +19,31 @@ namespace LazyPainter
         #region Fields
 
         // GUI variables.
-        private Rect windowRect = new Rect(Screen.width * 0.775f, Screen.height * 0.2f, 0, 0);
+        private static Rect windowRect = new Rect(Screen.width * 0.04f, Screen.height * 0.1f, 0, 0);
         private int windowID;
         private int windowWidth = 300;
         private GUIStyle boxStyle;
         private GUIStyle questionStyle;
         private Texture2D[] colourTextures;
         private int editingColour = 0;
-        //private GameObject colourPicker;
         private static bool scrollLock = false;
         private bool showHelp = false;
 
+        private static ClickBlocker clickBlocker;
+        public static ControlTypes controlLock =
+            ControlTypes.EDITOR_PAD_PICK_PLACE
+            | ControlTypes.EDITOR_GIZMO_TOOLS
+            | ControlTypes.EDITOR_PAD_PICK_COPY
+            | ControlTypes.EDITOR_ICON_HOVER
+            | ControlTypes.EDITOR_ICON_PICK
+            | ControlTypes.EDITOR_TAB_SWITCH
+            | ControlTypes.EDITOR_MODE_SWITCH
+            | ControlTypes.EDITOR_ROOT_REFLOW
+            | ControlTypes.EDITOR_SYM_SNAP_UI
+            | ControlTypes.EDITOR_UNDO_REDO;
+
         private int colourMode = 0;
-        private string[] colourModes = new string[] { "HSV", "RGB" }; 
+        private string[] colourModes = new string[] { "HSV", "RGB" };
         private bool UseRGB => colourMode == 1;
 
         private Vector2 presetColorScrollPos;
@@ -66,12 +76,9 @@ namespace LazyPainter
             }
         }
 
-        //public float customFalloff = 0f;
-
         // Toolbar.
-        private static bool addedAppLauncherButton = false;
-        public static bool guiEnabled = false;
-        private static bool guiHidden = false;
+        private ApplicationLauncherButton appLauncherButton;
+        public bool guiEnabled = false;
 
         // Colour settings.
         private float[] speculars = { 127, 127, 127 };
@@ -101,7 +108,7 @@ namespace LazyPainter
         private List<Part> selectedParts = new List<Part>();
         internal static FieldInfo textureSetsField = typeof(KSPTextureSwitch).GetField("textureSets", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        public string[] textureWords = new string[] { "mwnn", "paint", "recolour" }; 
+        public string[] textureWords = new string[] { "mwnn", "paint", "recolour" };
 
         #endregion
 
@@ -109,28 +116,38 @@ namespace LazyPainter
 
         void Start()
         {
+            if (HighLogic.LoadedScene != GameScenes.FLIGHT && HighLogic.LoadedScene != GameScenes.EDITOR)
+            {
+                Destroy(this);
+                return;
+            }
+
             AddToolbarButton();
             windowID = GUIUtility.GetControlID(FocusType.Passive);
 
-            GameEvents.onHideUI.Add(OnHideUI);
-            GameEvents.onShowUI.Add(OnShowUI);
+            if (clickBlocker == null)
+                clickBlocker = ClickBlocker.Create(UIMasterController.Instance.mainCanvas, nameof(LazyPainter));
+
+            GameEvents.onGameSceneLoadRequested.Add(OnSceneChange);
         }
 
-        // todo
-        // part search
-        // mega lag
-        // load colour presets
+        private void OnSceneChange(GameScenes data)
+        {
+            DisableGui();
+        }
 
         private void OnGUI()
         {
-            if (guiEnabled && !guiHidden)
+            if (guiEnabled && UIMasterController.Instance.IsUIShowing)
                 DrawGUI();
-
-            //Debug.Log(Mouse.HoveredPart.name);
 
             //https://forum.kerbalspaceprogram.com/topic/203394-modders-notes-1120/
             //https://www.kerbalspaceprogram.com/ksp/api/class_k_s_p_1_1_u_i_1_1_app_u_i___data.html
             //https://www.kerbalspaceprogram.com/ksp/api/class_k_s_p_1_1_u_i_1_1_generic_app_frame.html
+
+            // https://github.com/gotmachine/PhysicsHold/blob/master/PhysicsHold/DialogGuiVesselWidget.cs
+            // https://github.com/gotmachine/PhysicsHold/blob/master/PhysicsHold/PhysicsHoldManager.cs
+            // https://github.com/S-C-A-N/SCANsat/blob/e2d7bde255f5a263a04f5ace60af5c674e50516a/SCANsat/SCAN_Unity/SCAN_UI_Loader.cs#L1018
         }
 
         void Update()
@@ -145,8 +162,12 @@ namespace LazyPainter
 
         void OnDestroy()
         {
-            GameEvents.onHideUI.Remove(OnHideUI);
-            GameEvents.onShowUI.Remove(OnShowUI);
+            InputLockManager.RemoveControlLock("LazyPainterGUILock");
+            InputLockManager.RemoveControlLock("LazyPainterScrollLock");
+            GameEvents.onGameSceneLoadRequested.Remove(OnSceneChange);
+
+            if (appLauncherButton)
+                ApplicationLauncher.Instance.RemoveModApplication(appLauncherButton);
         }
 
         #endregion
@@ -183,7 +204,7 @@ namespace LazyPainter
                 return;
             }
 
-            // Clicked a part without holding anything down
+            // Clicked an already selected part without holding anything down
             if (!Input.GetKey(KeyCode.LeftShift) && !Input.GetKey(KeyCode.RightShift) && selectedParts.Count == 1 && selectedParts.Contains(hoveredPart))
             {
                 selectedParts.Remove(hoveredPart);
@@ -219,12 +240,12 @@ namespace LazyPainter
                 if (recolourablePartModule == null)
                     return;
 
-                RecoloringData[] matchColour = recolourablePartModule.GetSectionColors();   
+                RecoloringData[] matchColour = recolourablePartModule.GetSectionColors();
 
                 // Control alt click on an already selected part, remove all parts with the same colour.
                 if (selectedParts.Contains(hoveredPart))
                 {
-                    var matching = switchers.FindAll(s => s.GetSectionColors()[0].IsEqual(matchColour[0]));
+                    List<RecolourablePartModule> matching = switchers.FindAll(s => s.GetSectionColors()[0].IsEqual(matchColour[0]));
                     selectedParts = selectedParts.Except(matching.Select(m => m.part)).ToList();
                 }
                 // Control alt click on a new part, add all parts with the same colour.
@@ -298,7 +319,7 @@ namespace LazyPainter
                 return;
             }
 
-            // Clicked a part without holding anything down, clear selection and select the part
+            // Clicked an unselected part without holding anything down, clear selection and select the part
             selectedParts.Clear();
             selectedParts.Add(hoveredPart);
             UpdateHighlighting();
@@ -307,14 +328,14 @@ namespace LazyPainter
 
         void UpdateHighlighting()
         {
-            var nonselected = PartsList.Except(selectedParts);
-            foreach (var part in nonselected)
+            IEnumerable<Part> nonselected = PartsList.Except(selectedParts);
+            foreach (Part part in nonselected)
             {
                 part.SetHighlightColor(Color.clear);
                 part.SetHighlightType(Part.HighlightType.Disabled);
             }
 
-            foreach (var part in selectedParts)
+            foreach (Part part in selectedParts)
             {
                 part.SetHighlightColor(Color.white);
                 part.SetHighlightType(Part.HighlightType.AlwaysOn);
@@ -323,7 +344,7 @@ namespace LazyPainter
 
         void OnMouseOverUI(bool over)
         {
-            foreach (var part in selectedParts)
+            foreach (Part part in selectedParts)
             {
                 part.mpb.SetColor(PropertyIDs._RimColor, over ? Color.clear : Color.white);
                 part.GetPartRenderers().ToList().ForEach(r => r.SetPropertyBlock(part.mpb));
@@ -337,7 +358,7 @@ namespace LazyPainter
             KSPTextureSwitch[] textureSwitchers;
             TUPartVariant[] partVariants;
 
-            foreach (var part in selectedParts)
+            foreach (Part part in selectedParts)
             {
                 textureSwitchers = part.gameObject.GetComponents<KSPTextureSwitch>();
                 if (textureSwitchers.Length > 0)
@@ -391,7 +412,7 @@ namespace LazyPainter
 
                 textureNames = switchers[i].GetTextures();
 
-                foreach (var name in textureNames)
+                foreach (string name in textureNames)
                 {
                     nameLower = name.ToLower();
                     if (textureWords.Any(w => nameLower.Contains(w)))
@@ -457,7 +478,7 @@ namespace LazyPainter
         {
             if (part.TryGetComponent(out KSPTextureSwitch switcher))
             {
-               return new RecolourablePartModule(switcher);
+                return new RecolourablePartModule(switcher);
             }
             else if (part.TryGetComponent(out TUPartVariant partVariant))
             {
@@ -482,9 +503,9 @@ namespace LazyPainter
             metals = colours.Select(c => c.metallic * 255).ToArray();
             speculars = colours.Select(c => c.specular * 255).ToArray();
             details = colours.Select(c => c.detail * 100).ToArray();
-            selectionState = new bool[] { 
-                true, 
-                !colours[0].IsEqual(colours[1]), 
+            selectionState = new bool[] {
+                true,
+                !colours[0].IsEqual(colours[1]),
                 !colours[1].IsEqual(colours[1]) && !colours[0].IsEqual(colours[2])
             };
 
@@ -520,7 +541,7 @@ namespace LazyPainter
             if (customGroup == null)
                 AddCustomGroup();
 
-            var group = customGroup.colors;
+            List<RecoloringDataPreset> group = customGroup.colors;
             int index;
             if ((index = group.FindIndex(p => p.name == preset.name)) != -1)
             {
@@ -547,7 +568,7 @@ namespace LazyPainter
             else
                 file = new ConfigNode();
 
-            var groups = file.GetNodes("PRESET_COLOR_GROUP");
+            ConfigNode[] groups = file.GetNodes("PRESET_COLOR_GROUP");
             ConfigNode groupsNode = groups.FirstOrDefault(g => g.GetValue("name") == "Custom");
             if (groupsNode == null)
             {
@@ -582,7 +603,7 @@ namespace LazyPainter
             if (customGroup == null)
                 return;
 
-            var preset = customGroup.colors[customIndex];
+            RecoloringDataPreset preset = customGroup.colors[customIndex];
             customGroup.colors.RemoveAt(customIndex);
 
             // Remove from file.
@@ -600,7 +621,7 @@ namespace LazyPainter
             else
                 return;
 
-            var groups = file.GetNodes("PRESET_COLOR_GROUP");
+            ConfigNode[] groups = file.GetNodes("PRESET_COLOR_GROUP");
             ConfigNode groupsNode = groups.FirstOrDefault(g => g.GetValue("name") == "Custom");
             if (groupsNode == null)
                 return;
@@ -624,8 +645,8 @@ namespace LazyPainter
             customGroup.colors = new List<RecoloringDataPreset>();
             PresetColor.getGroupList().Add(customGroup);
 
-            var groupsField = typeof(PresetColor).GetField("presetGroups", BindingFlags.Static | BindingFlags.NonPublic);
-            var presetGroups = (Dictionary<string, RecoloringDataPresetGroup>)groupsField.GetValue(null);
+            FieldInfo groupsField = typeof(PresetColor).GetField("presetGroups", BindingFlags.Static | BindingFlags.NonPublic);
+            Dictionary<string, RecoloringDataPresetGroup> presetGroups = (Dictionary<string, RecoloringDataPresetGroup>)groupsField.GetValue(null);
             presetGroups.Add("Custom", customGroup);
         }
 
@@ -669,9 +690,9 @@ namespace LazyPainter
 
         static int[] RGBtoRGB255(Color color)
         {
-            return new int[] { 
-                Mathf.RoundToInt(color.r * 255), 
-                Mathf.RoundToInt(color.g * 255), 
+            return new int[] {
+                Mathf.RoundToInt(color.r * 255),
+                Mathf.RoundToInt(color.g * 255),
                 Mathf.RoundToInt(color.b * 255)
             };
         }
@@ -680,20 +701,26 @@ namespace LazyPainter
 
         #region GUI
 
-        public void DrawGUI() =>
+        public void DrawGUI()
+        {
+            // Keep window inside screen space.
+            windowRect.position = new Vector2(
+                Mathf.Clamp(windowRect.position.x, 0, Screen.width - windowRect.width),
+                Mathf.Clamp(windowRect.position.y, 0, Screen.height - windowRect.height)
+            );
+
             windowRect = GUILayout.Window(windowID, windowRect, FillWindow, "Lazy Painter", GUILayout.Height(1), GUILayout.Width(windowWidth));
+            clickBlocker.UpdateRect(windowRect);
+        }
 
         private void FillWindow(int windowID)
         {
-            if (guiHidden)
-                return;
-
             bool lockedScroll = false;
             if (windowRect.Contains(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y)))
             {
                 lockedScroll = true;
                 scrollLock = true;
-                InputLockManager.SetControlLock(ControlTypes.CAMERACONTROLS, "LazyPainterGUILock2");
+                InputLockManager.SetControlLock(ControlTypes.CAMERACONTROLS, "LazyPainterScrollLock");
             }
 
             if (GUI.Button(new Rect(windowRect.width - 18, 2, 16, 16), ""))
@@ -733,53 +760,11 @@ namespace LazyPainter
 
             GUILayout.EndHorizontal();
 
-            // Stock colour picker.
-
-            /*if (GUILayout.Button("Colour Picker"))
-            {
-                if (colourPicker == null)
-                {
-                    var bases = Resources.FindObjectsOfTypeAll<ColorPicker>();
-                    var basePicker = bases[1].gameObject;
-
-                    var canvas = GameObject.Find("/_UIMaster/ActionCanvas");
-                    colourPicker = Instantiate(basePicker, canvas.transform);
-                    colourPicker.name = "LazyPainterColorPicker";
-                    colourPicker.SetActive(true);
-                    //newPicker.transform.position = new Vector3(
-                    //    Screen.width * 0.8f - Screen.width * 0.5f,
-                    //    Screen.height * 0.8f - Screen.height * 0.5f,
-                    //    0);
-
-                    colourPicker.transform.position = new Vector3(
-                        540,
-                        -250,
-                        0);
-
-                    colourPicker.GetComponent<ColorPicker>().onValueChanged.AddListener((Color color) =>
-                    {
-                        Debug.Log($"Color changed: {color}");
-                        //red = color.r * 255;
-                        //green = color.g * 255;
-                        //blue = color.b * 255;
-                        currentColour = color;
-
-                        UpdateColourBox();
-                        ApplyAll();
-                    });
-                }
-                else
-                {
-                    Destroy(colourPicker);
-                    colourPicker = null;
-                }
-            }*/
-
             // Colour slot section.
 
             GUILayout.BeginVertical(boxStyle);
             int oldEditingColour = editingColour;
-            var disabledStrings = new string[] { "", "", "" };
+            string[] disabledStrings = new string[] { "", "", "" };
             editingColour = GUILayout.SelectionGrid(editingColour, disabledStrings, 3, GUILayout.Width(windowWidth), GUILayout.Height(50));
 
             if (GUI.changed && editingColour != 0)
@@ -879,7 +864,7 @@ namespace LazyPainter
 
             if (!lockedScroll && scrollLock)
             {
-                InputLockManager.RemoveControlLock("LazyPainterGUILock2");
+                InputLockManager.RemoveControlLock("LazyPainterScrollLock");
             }
         }
 
@@ -1085,13 +1070,12 @@ namespace LazyPainter
 
         public void AddToolbarButton()
         {
-            if (addedAppLauncherButton)
+            if (appLauncherButton != null)
                 return;
 
-            var scenes = ApplicationLauncher.AppScenes.SPH | ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.FLIGHT;
+            ApplicationLauncher.AppScenes scenes = ApplicationLauncher.AppScenes.SPH | ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.FLIGHT;
             Texture buttonTexture = GameDatabase.Instance.GetTexture("LazyPainter/Textures/icon", false);
-            ApplicationLauncher.Instance.AddModApplication(ToggleGui, ToggleGui, null, null, null, null, scenes, buttonTexture);
-            addedAppLauncherButton = true;
+            appLauncherButton = ApplicationLauncher.Instance.AddModApplication(EnableGui, DisableGui, null, null, null, null, scenes, buttonTexture);
         }
 
         void ToggleGui()
@@ -1102,15 +1086,40 @@ namespace LazyPainter
                 EnableGui();
         }
 
-        void EnableGui() {
-            ControlTypes controls = ControlTypes.ALLBUTCAMERAS;
-            controls &= ~ControlTypes.TWEAKABLES;
-            InputLockManager.SetControlLock(controls, "LazyPainterGUILock");
+        public void LockUI(bool locked)
+        {
+            // Lock controls.
+
+            if (locked)
+                InputLockManager.SetControlLock(controlLock, "LazyPainterGUILock");
+            else
+                InputLockManager.RemoveControlLock("LazyPainterGUILock");
+
+            // Cause the parts list to slide out.
+
+            if (HighLogic.LoadedSceneIsEditor)
+            {
+                EditorLogic.fetch.UpdateUI();
+                string stateType = locked ? "Out" : "In";
+
+                EditorToolsUI toolsUI = EditorLogic.fetch.toolsUI;
+                if (toolsUI != null && toolsUI.gameObject.activeInHierarchy)
+                    toolsUI.panelTransition?.Transition(stateType);
+
+                EditorPartList.Instance.GetComponent<UIPanelTransition>()?.Transition(stateType);
+                EditorPanels.Instance.searchField.Transition(stateType);
+            }
+        }
+
+        void EnableGui()
+        {
+            LockUI(true);
+
             userHighlighterLimit = Highlighter.HighlighterLimit;
             Highlighter.HighlighterLimit = 1f;
 
-            var parts = PartsList;
-            foreach (var part in parts)
+            List<Part> parts = PartsList;
+            foreach (Part part in parts)
             {
                 part.SetHighlightType(Part.HighlightType.Disabled);
 
@@ -1123,156 +1132,34 @@ namespace LazyPainter
                 AddCustomGroup();
 
             guiEnabled = true;
+
+            if (appLauncherButton.toggleButton.CurrentState == UIRadioButton.State.False)
+                appLauncherButton.SetTrue(false);
+
+            clickBlocker.Blocking = true;
         }
 
         void DisableGui()
         {
-            InputLockManager.RemoveControlLock("LazyPainterGUILock");
-            InputLockManager.ClearControlLocks();
+            guiEnabled = false;
+
+            LockUI(false);
+            InputLockManager.RemoveControlLock("LazyPainterScrollLock");
             Highlighter.HighlighterLimit = userHighlighterLimit;
 
-            var parts = PartsList;
-            foreach (var part in parts)
+            List<Part> parts = PartsList;
+            foreach (Part part in parts)
             {
                 part.mpb.SetFloat(PropertyIDs._RimFalloff, 2f);
                 part.SetHighlightDefault();
             }
 
-            guiEnabled = false;
+            if (appLauncherButton.toggleButton.CurrentState == KSP.UI.UIRadioButton.State.True)
+                appLauncherButton.SetFalse(false);
+
+            clickBlocker.Blocking = false;
         }
-
-        private void OnShowUI() =>
-            OnToggleUI(false);
-
-        private void OnHideUI() =>
-            OnToggleUI(true);
-
-        private void OnToggleUI(bool hide) =>
-            guiHidden = hide;
 
         #endregion
-    }
-
-    public static class RecoloringDataExtensions
-    {
-        public static bool IsEqual(this RecoloringData colour1, RecoloringData colour2)
-        {
-            return colour1.color == colour2.color &&
-                   colour1.metallic == colour2.metallic &&
-                   colour1.specular == colour2.specular &&
-                   colour1.detail == colour2.detail;
-        }
-    }
-
-    // Wrapper class for the standalone texture switcher and the part variant integrated texture switcher.
-
-    public class RecolourablePartModule
-    {
-        public Part part { get { return pv ? partVariant.part : switcher.part; } }
-        public TUPartVariant partVariant;
-        public KSPTextureSwitch switcher;
-        public bool pv = false;
-
-        public TextureSetContainer _textureSets;
-        public TextureSetContainer TextureSets
-        {
-            get
-            {
-                if (_textureSets == null)
-                    _textureSets = (TextureSetContainer)LazyPainter.textureSetsField.GetValue(switcher);
-
-                return _textureSets;
-            }
-        }
-
-        public ModulePartVariants _modulePartVariants;
-        public ModulePartVariants VariantsModule
-        {
-            get
-            {
-                if (_modulePartVariants == null)
-                    _modulePartVariants = part.FindModuleImplementing<ModulePartVariants>();
-
-                return _modulePartVariants;
-            }
-        }
-
-        public string CurrentTexture
-        {
-            get { 
-                return pv ? partVariant.textureSet : switcher.currentTextureSet;
-            }
-        }
-
-        public RecolourablePartModule(KSPTextureSwitch switcher)
-        {
-            this.switcher = switcher;
-        }
-
-        public RecolourablePartModule(TUPartVariant partVariant)
-        {
-            this.partVariant = partVariant;
-            pv = true;
-        }
-
-        public RecoloringData[] GetSectionColors()
-        {
-            if (pv)
-                return partVariant.getSectionColors(partVariant.textureSet);
-            else
-                return switcher.getSectionColors(switcher.currentTextureSet);
-        }
-
-        public void SetSectionColors(RecoloringData[] colors)
-        {
-            if (pv)
-                partVariant.setSectionColors(partVariant.textureSet, colors);
-            else
-                switcher.setSectionColors(switcher.currentTextureSet, colors);
-        }
-
-        public void SetTexture(string textureName)
-        {
-            if (pv)
-                VariantsModule.SetVariant(textureName);
-            else
-                switcher.enableTextureSet(textureName, false, false);
-        }
-
-        public string[] GetTextures()
-        {
-            if (pv)
-                return VariantsModule.GetVariantNames().ToArray();
-            else
-                return TextureSets.getTextureSetNames();
-        }
-
-        //public void Disable()
-        //{
-        //    string current = CurrentTexture;
-        //    string old = LazyPainter.cache.FirstOrDefault(x => x.Value == current).Key;
-
-        //    if (old != null)
-        //    {
-        //        if (pv)
-        //            VariantsModule.SetVariant(old);
-        //        else
-        //            switcher.enableTextureSet(old, false, false);
-        //    }
-        //    else { 
-        //        if (pv)
-        //            VariantsModule.SetVariant(VariantsModule.GetVariantNames()[0]);
-        //        else
-        //            switcher.enableTextureSet(TextureSets.getTextureSetNames()[0], false, false);
-        //    }
-        //}
-
-        public void Disable()
-        {
-            if (pv)
-                VariantsModule.SetVariant(VariantsModule.GetVariantNames()[0]);
-            else
-                switcher.enableTextureSet(TextureSets.getTextureSetNames()[0], false, false);
-        }
     }
 }
