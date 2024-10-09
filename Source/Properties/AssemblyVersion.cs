@@ -5,6 +5,6 @@
   
  using System.Reflection;
 
- [assembly: AssemblyVersion("0.2.3.0")]
- [assembly: AssemblyFileVersion("0.2.3.0")]
- [assembly: KSPAssembly("LazyPainter", 0, 2, 3)]
+ [assembly: AssemblyVersion("0.3.0.0")]
+ [assembly: AssemblyFileVersion("0.3.0.0")]
+ [assembly: KSPAssembly("LazyPainter", 0, 3, 0)]

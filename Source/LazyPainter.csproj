@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\Krafs.Publicizer.1.0.3\build\Krafs.Publicizer.props" Condition="Exists('..\packages\Krafs.Publicizer.1.0.3\build\Krafs.Publicizer.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -12,6 +13,8 @@
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -51,7 +54,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ClickBlocker.cs" />
+    <Compile Include="Colour.cs" />
+    <Compile Include="LazyPainterIMGUI.cs" />
+    <Compile Include="Loading.cs" />
     <Compile Include="LazyPainter.cs" />
+    <Compile Include="Presets.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\AssemblyVersion.cs">
       <AutoGen>True</AutoGen>
@@ -59,13 +66,17 @@
       <DependentUpon>AssemblyVersion.tt</DependentUpon>
     </Compile>
     <Compile Include="RecoloringData.cs" />
-    <Compile Include="RecolourablePartModule.cs" />
+    <Compile Include="RecolourablePart.cs" />
+    <Compile Include="RecolourableSection.cs" />
+    <Compile Include="RecolourableSwitcher.cs" />
+    <Compile Include="RecolourableVariant.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Assembly-CSharp">
       <HintPath>$(ManagedPath)\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="System" />
     <Reference Include="TexturesUnlimited">
       <HintPath>$(ReferencePath)GameData\000_TexturesUnlimited\Plugins\TexturesUnlimited.dll</HintPath>
       <Private>False</Private>
@@ -90,6 +101,10 @@
       <HintPath>$(ManagedPath)\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(ManagedPath)\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
       <HintPath>$(ManagedPath)\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>False</Private>
@@ -112,32 +127,51 @@
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- note the IncludeCompilerGeneratedMembers is only in krafs 2, so it has no effect here.  but leaving it just in case we upgrade later -->
+    <Publicize Include="Assembly-CSharp" IncludeCompilerGeneratedMembers="false" />
+    <Publicize Include="TexturesUnlimited" IncludeCompilerGeneratedMembers="false" />
+    <DoNotPublicize Include="Assembly-CSharp:BaseField`1.OnValueModified" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
   <PropertyGroup>
-    <PostBuildEvent>set KSPDIR=$(ReferencePath)
-set TGTDIR=$(TargetDir)
-set NAME=$(TargetName)
-set FILENAME=$(TargetFileName)
+    <PostBuildEvent>
+			set KSPDIR=$(ReferencePath)
+			set TGTDIR=$(TargetDir)
+			set NAME=$(TargetName)
+			set FILENAME=$(TargetFileName)
 
-IF "%25KSPDIR%25"=="" (
+			IF "%25KSPDIR%25"=="" (
 
-    ECHO Configuration error - KSPDIR not specified in project.
+			ECHO Configuration error - KSPDIR not specified in project.
 
-    ECHO Either set KSPDIR environment variable or edit BetterLoadSaveGame.Common.props
+			ECHO Either set KSPDIR environment variable or edit BetterLoadSaveGame.Common.props
 
-    PAUSE
+			PAUSE
 
-    GOTO DONE
+			GOTO DONE
 
-)
+			)
 
-cd "$(SolutionDir)"
-call "deploy.bat"
+			cd "$(SolutionDir)"
+			call "deploy.bat"
 
-if $(ConfigurationName) == Release (
-    call "buildRelease.bat"
-)</PostBuildEvent>
+			if $(ConfigurationName) == Release (
+			call "buildRelease.bat"
+			)
+		</PostBuildEvent>
   </PropertyGroup>
   <PropertyGroup>
     <PreBuildEvent>"$(DevEnvDir)\texttransform.exe" "$(ProjectDir)Properties\AssemblyVersion.tt"</PreBuildEvent>
   </PropertyGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\Krafs.Publicizer.1.0.3\build\Krafs.Publicizer.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Krafs.Publicizer.1.0.3\build\Krafs.Publicizer.props'))" />
+    <Error Condition="!Exists('..\packages\Krafs.Publicizer.1.0.3\build\Krafs.Publicizer.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Krafs.Publicizer.1.0.3\build\Krafs.Publicizer.targets'))" />
+  </Target>
+  <Import Project="..\packages\Krafs.Publicizer.1.0.3\build\Krafs.Publicizer.targets" Condition="Exists('..\packages\Krafs.Publicizer.1.0.3\build\Krafs.Publicizer.targets')" />
 </Project>
