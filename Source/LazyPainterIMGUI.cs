@@ -1,4 +1,4 @@
-﻿using KSP.UI;
+using KSP.UI;
 using KSP.UI.Screens;
 using KSPShaderTools;
 using System;
@@ -20,14 +20,13 @@ namespace LazyPainter
         // Window.
         private static Rect windowRect = new Rect(Screen.width * 0.04f, Screen.height * 0.1f, 0, 0);
         private int windowID;
-        private int windowWidth = 300;
+        public static int windowWidth = 300;
 
         // Styles.
         private static GUIStyle boxStyle;
         private static GUIStyle questionStyle;
         private static GUIStyle nonWrappingLabelStyle;
         private static GUIStyle squareButtonStyle;
-        private static GUIStyle colourSlotStyle;
         private static GUIStyle buttonStyle;
         private static GUIStyle textBoxStyle;
 
@@ -431,12 +430,6 @@ namespace LazyPainter
             };
 
             buttonStyle = GUI.skin.button;
-
-            colourSlotStyle = new GUIStyle(GUI.skin.button)
-            {
-                fontSize = 400,
-                alignment = TextAnchor.MiddleCenter
-            };
 
             textBoxStyle = new GUIStyle(GUI.skin.textField)
             {
