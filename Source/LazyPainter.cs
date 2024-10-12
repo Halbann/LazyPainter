@@ -39,8 +39,12 @@ namespace LazyPainter
         private float userHighlighterLimit;
         private bool userInflightHighlight;
 
-        private bool mouseOverVessel = false;
         public LazyPainterIMGUI imgui;
+        private bool mouseOverVessel = false;
+        private float lastClickTime = 0;
+
+        public static bool noRecolourableTextureSetsDetected = (TexturesUnlimitedLoader.loadedTextureSets?.Count ?? 0) < 1
+            || !TexturesUnlimitedLoader.loadedTextureSets.Any(s => s.Value.supportsRecoloring);
 
         private List<Part> PartsList => HighLogic.LoadedSceneIsEditor ? EditorLogic.fetch.ship.parts : FlightGlobals.ActiveVessel.Parts;
 
@@ -394,6 +398,9 @@ namespace LazyPainter
                 return;
             }
 
+            float previousClickTime = lastClickTime;
+            lastClickTime = Time.realtimeSinceStartup;
+
             // Control click or control shift click.
             if (modifiers.Equals(true, false, false) || modifiers.Equals(true, true, false))
             {
@@ -424,15 +431,46 @@ namespace LazyPainter
             // Shift click
             if (modifiers.Equals(false, true, false))
             {
+                bool doubleClick = Time.realtimeSinceStartup - previousClickTime < 0.2f;
+
                 // Shift click on an already selected part, remove it
                 if (selectedSections.Contains(hoveredSection))
                 {
-                    EnqueueDeselect(hoveredSection);
-                    DoDeselect();
+                    if (doubleClick && !hoveredSection.host.simple)
+                    {
+                        // Select siblings.
+                        foreach (RecolourableSection section in hoveredSection.host.sections)
+                            Select(section);
+                    }
+                    else
+                    {
+                        EnqueueDeselect(hoveredSection);
+                        DoDeselect();
+                    }
                 }
                 // Shift click on a new part, add it to the selection
                 else
-                    Select(hoveredSection);
+                {
+                    if (doubleClick && !hoveredSection.host.simple)
+                    {
+                        if (hoveredSection.host.sections.Count(s => !selectedSections.Contains(s)) == 1)
+                        {
+                            // Deselect siblings.
+                            foreach (RecolourableSection section in hoveredSection.host.sections)
+                                EnqueueDeselect(section);
+
+                            DoDeselect();
+                        }
+                        else
+                        {
+                            // Select siblings.
+                            foreach (RecolourableSection section in hoveredSection.host.sections)
+                                Select(section);
+                        }
+                    }
+                    else
+                        Select(hoveredSection);
+                }
 
                 UpdateHighlighting();
                 return;

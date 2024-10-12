@@ -21,7 +21,7 @@ namespace LazyPainter
         // Window.
         private static Rect windowRect = new Rect(Screen.width * 0.04f, Screen.height * 0.1f, 0, 0);
         private int windowID;
-        public static int windowWidth = 300;
+        public static int windowWidth = 340;
 
         // Styles.
         private static GUIStyle boxStyle;
@@ -196,15 +196,16 @@ namespace LazyPainter
         {
             GUILayout.BeginHorizontal(boxStyle);
             GUILayout.BeginHorizontal(boxStyle);
-            GUILayout.Label("Click on parts to select them." +
-                "\n\n<b>Control click</b> a part to select all parts of that type. " +
-                "\n\n<b>Shift click</b> to add more parts to the selection. " +
-                "\n\n<b>Control alt click</b> a part to select all parts that share the same primary colour. " +
-                "\n\nPress <b>control + A</b> to select all parts. " +
-                "\n\nClick anywhere to clear the selection. " +
-                "\n\n<b>Alt click</b> a part to copy its colours to the palette. " +
-                "\n\nClick <b>'Paint'</b> to activate recolouring for the selected parts. " +
-                "\n\nRight click a colour slot to enable/disable it.");
+            GUILayout.Label("<b>Click on sections</b> of parts to select them. Some parts have many sections, and some parts have one section or none at all." +
+                "\n\n<b>Double click</b> to select <b>all sections</b> on a part at once. " +
+                "\n\n<b>Shift click</b> to <b>add</b> more sections to the selection. " +
+                "\n\n<b>Control click</b> a section to select <b>all identical sections</b>. " +
+                "\n\n<b>Control + alt click</b> a section to select all sections that share the <b>same primary colour</b>. " +
+                "\n\nPress <b>control + A</b> to <b>select all</b> sections. " +
+                "\n\nClick in empty space to <b>clear</b> the selection. " +
+                "\n\n<b>Alt click</b> a part to <b>copy its colours</b> to the palette. " +
+                "\n\nClick <b>'Paint'</b> to <b>activate recolouring</b> for the selected sections. " +
+                "\n\n<b>Right click</b> a <b>colour slot</b> to enable/disable it.");
             GUILayout.EndHorizontal();
             GUILayout.EndHorizontal();
         }
@@ -266,7 +267,10 @@ namespace LazyPainter
 
             // Main section or loading screen.
             if (lp.Ready)
-                MainSection();
+                if (!LazyPainter.noRecolourableTextureSetsDetected)
+                    MainSection();
+                else
+                    Warning();
             else
                 LoadingScreen();
 
@@ -293,6 +297,22 @@ namespace LazyPainter
                 InputLockManager.RemoveControlLock("LazyPainterScrollLock");
             }
         }
+
+        private void Warning()
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+
+            string warningString = "<b><color=red>Warning</color>: No recolourable texture sets loaded." +
+            $"\nAre you missing 'Textures Unlimited Recolour Depot'?</b>";
+            GUILayout.Label(warningString, boxStyle);
+
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+        }
+
+        public static float colourSlotWidth = 89;
+        public static float colourSlotSpacing = 16;
 
         private void MainSection()
         {
@@ -328,11 +348,13 @@ namespace LazyPainter
 
             GUILayout.EndHorizontal();
 
+            // Colour slots.
+
             GUILayout.BeginVertical(boxStyle);
 
             int oldEditingColour = lp.editingColour;
             string[] disabledStrings = new string[] { "", "", "" };
-            lp.editingColour = GUILayout.SelectionGrid(lp.editingColour, disabledStrings, 3, GUILayout.Width(windowWidth), GUILayout.Height(50));
+            lp.editingColour = GUILayout.SelectionGrid(lp.editingColour, disabledStrings, 3, GUILayout.Height(50));
 
             if (GUI.changed && lp.editingColour != 0)
             {
@@ -350,10 +372,15 @@ namespace LazyPainter
                 lp.ApplyRecolouring();
             }
 
-            int colourWidth = 85;
-            int verticalOffset = 82; //79 54
+            int colourHeight = 39;
+            int horizontalOffset = 20;
+            int verticalOffset = 82; // 79 54
+
             for (int i = 0; i < 3; i++)
-                GUI.DrawTexture(new Rect(20 + (i * (16 + colourWidth)), verticalOffset, colourWidth, 39), colourTextures[i], ScaleMode.StretchToFill, true);
+            {
+                Rect rect = new Rect(horizontalOffset + (i * (colourSlotSpacing + colourSlotWidth)), verticalOffset, colourSlotWidth, colourHeight);
+                GUI.DrawTexture(rect, colourTextures[i], ScaleMode.StretchToFill, true);
+            }
 
 
             // Colour slider section.
