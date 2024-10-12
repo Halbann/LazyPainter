@@ -1,11 +1,8 @@
-﻿using Highlighting;
-using KSP.UI;
-using KSP.UI.Screens;
+using Highlighting;
 using KSPShaderTools;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
@@ -18,18 +15,44 @@ namespace LazyPainter
     {
         #region Fields
 
-        // GUI variables.
-        private static Rect windowRect = new Rect(Screen.width * 0.04f, Screen.height * 0.1f, 0, 0);
-        private int windowID;
-        private int windowWidth = 300;
-        private GUIStyle boxStyle;
-        private GUIStyle questionStyle;
-        private Texture2D[] colourTextures;
-        private int editingColour = 0;
-        private static bool scrollLock = false;
-        private bool showHelp = false;
+        // Colour settings.
 
-        private static ClickBlocker clickBlocker;
+        public ModalColour[] colourData = new ModalColour[]
+        {
+            new ModalColour(XKCDColors.PaleGrey, 0.5f, 0, 1f),
+            new ModalColour(XKCDColors.GreyBlue, 0.5f, 0, 1f),
+            new ModalColour(XKCDColors.DarkGrey, 0.5f, 0, 1f)
+        };
+
+        public bool[] selectionState = new bool[] { true, false, false };
+        public int editingColour = 0;
+
+        // Parts.
+        public bool Ready { get; private set; }
+        public float setupProgress = 0;
+        public static bool yieldOnLoad = true;
+        public Part currentSetupPart;
+        private Coroutine setupRoutine;
+
+        private float previousTimescale = 1f;
+        private Vector3 previousRbVelocity;
+        private float userHighlighterLimit;
+        private bool userInflightHighlight;
+
+        public LazyPainterIMGUI imgui;
+        private bool mouseOverVessel = false;
+        private float lastClickTime = 0;
+
+        public static bool noRecolourableTextureSetsDetected = (TexturesUnlimitedLoader.loadedTextureSets?.Count ?? 0) < 1
+            || !TexturesUnlimitedLoader.loadedTextureSets.Any(s => s.Value.supportsRecoloring);
+
+        private List<Part> PartsList => HighLogic.LoadedSceneIsEditor ? EditorLogic.fetch.ship.parts : FlightGlobals.ActiveVessel.Parts;
+
+        public Dictionary<Part, RecolourablePart> allRecolourables = new Dictionary<Part, RecolourablePart>();
+        public HashSet<RecolourableSection> allSections = new HashSet<RecolourableSection>();
+        public readonly HashSet<RecolourableSection> selectedSections = new HashSet<RecolourableSection>();
+        public readonly HashSet<RecolourableSection> deselectionQueue = new HashSet<RecolourableSection>();
+
         public static ControlTypes controlLock =
             ControlTypes.EDITOR_PAD_PICK_PLACE
             | ControlTypes.EDITOR_GIZMO_TOOLS
@@ -42,79 +65,11 @@ namespace LazyPainter
             | ControlTypes.EDITOR_SYM_SNAP_UI
             | ControlTypes.EDITOR_UNDO_REDO;
 
-        private int colourMode = 0;
-        private string[] colourModes = new string[] { "HSV", "RGB" };
-        private bool UseRGB => colourMode == 1;
-
-        private Vector2 presetColorScrollPos;
-        private static GUIStyle nonWrappingLabelStyle;
-        private static GUIStyle squareButtonStyle;
-        private static GUIStyle colourSlotStyle;
-        private static GUIStyle buttonStyle;
-        private static GUIStyle textBoxStyle;
-        private static bool showPresetColours = false;
-        private static int groupIndex = 0;
-        private static string groupName = "FULL";
-        private string presetSaveString = "";
-        private int deleteIndex;
-        private bool deleteForm = false;
-        private string deleteTitle;
-
-        // Highlighting.
-        public float rimFallOff = 1.5f;
-        public float userHighlighterLimit = 1f;
-        private bool mouseOffPart = false;
-        private bool MouseOffPart
-        {
-            set
-            {
-                if (mouseOffPart == value)
-                    return;
-
-                mouseOffPart = value;
-                OnMouseOverUI(value);
-            }
-        }
-
-        // Toolbar.
-        private ApplicationLauncherButton appLauncherButton;
-        public bool guiEnabled = false;
-
-        // Colour settings.
-        private float[] speculars = { 127, 127, 127 };
-        private float[] metals = { 0, 0, 0 };
-        private float[] details = { 100, 100, 100 };
-
-        private float[][] coloursHSV = new float[][]
-        {
-            new float[] { 0, 0, 255 },
-            new float[] { 0, 0, 190 },
-            new float[] { 0, 0, 130 },
-        };
-
-        private float[][] coloursRGB = new float[][]
-        {
-            new float[] { 255, 255, 255 },
-            new float[] { 190, 190, 190 },
-            new float[] { 130, 130, 130 },
-        };
-
-        private bool[] selectionState = new bool[] { true, false, false };
-
-        // Parts.
-        private List<RecolourablePartModule> switchers = new List<RecolourablePartModule>();
-        internal static Dictionary<string, string> cache = new Dictionary<string, string> { };
-        private List<Part> PartsList => HighLogic.LoadedSceneIsEditor ? EditorLogic.SortedShipList : FlightGlobals.ActiveVessel.Parts;
-        private List<Part> selectedParts = new List<Part>();
-        internal static FieldInfo textureSetsField = typeof(KSPTextureSwitch).GetField("textureSets", BindingFlags.Instance | BindingFlags.NonPublic);
-
-        public string[] textureWords = new string[] { "mwnn", "paint", "recolour" };
-
         #endregion
 
         #region Main
 
-        void Start()
+        protected void Start()
         {
             if (HighLogic.LoadedScene != GameScenes.FLIGHT && HighLogic.LoadedScene != GameScenes.EDITOR)
             {
@@ -122,1052 +77,500 @@ namespace LazyPainter
                 return;
             }
 
-            AddToolbarButton();
-            windowID = GUIUtility.GetControlID(FocusType.Passive);
+            imgui = LazyPainterIMGUI.Create(this);
 
-            if (clickBlocker == null)
-                clickBlocker = ClickBlocker.Create(UIMasterController.Instance.mainCanvas, nameof(LazyPainter));
-
-            GameEvents.onGameSceneLoadRequested.Add(OnSceneChange);
-            GameEvents.onEditorScreenChange.Add(OnEditorScreenChange);
+            if (!PresetColor.getGroupList().Exists(x => x.name == "Custom"))
+                Presets.AddCustomGroup();
         }
 
-        private void OnEditorScreenChange(EditorScreen data)
+        protected void Update()
         {
-            if (data != EditorScreen.Parts)
-                appLauncherButton.gameObject.SetActive(false);
-            else
-                appLauncherButton.gameObject.SetActive(true);
-        }
-
-        private void OnSceneChange(GameScenes data)
-        {
-            DisableGui();
-        }
-
-        private void OnGUI()
-        {
-            if (guiEnabled && UIMasterController.Instance.IsUIShowing)
-                DrawGUI();
-
-            //https://forum.kerbalspaceprogram.com/topic/203394-modders-notes-1120/
-            //https://www.kerbalspaceprogram.com/ksp/api/class_k_s_p_1_1_u_i_1_1_app_u_i___data.html
-            //https://www.kerbalspaceprogram.com/ksp/api/class_k_s_p_1_1_u_i_1_1_generic_app_frame.html
-
-            // https://github.com/gotmachine/PhysicsHold/blob/master/PhysicsHold/DialogGuiVesselWidget.cs
-            // https://github.com/gotmachine/PhysicsHold/blob/master/PhysicsHold/PhysicsHoldManager.cs
-            // https://github.com/S-C-A-N/SCANsat/blob/e2d7bde255f5a263a04f5ace60af5c674e50516a/SCANsat/SCAN_Unity/SCAN_UI_Loader.cs#L1018
-        }
-
-        void Update()
-        {
-            if (!guiEnabled)
+            if (!Ready)
                 return;
 
             Selection();
-
-            MouseOffPart = Mouse.HoveredPart == null;
+            MouseOverVessel(Mouse.HoveredPart != null);
         }
 
-        void OnDestroy()
+        private void MouseOverVessel(bool over)
         {
-            InputLockManager.RemoveControlLock("LazyPainterGUILock");
-            InputLockManager.RemoveControlLock("LazyPainterScrollLock");
-            GameEvents.onGameSceneLoadRequested.Remove(OnSceneChange);
-            GameEvents.onEditorScreenChange.Remove(OnEditorScreenChange);
+            if (mouseOverVessel == over)
+                return;
 
-            if (appLauncherButton)
-                ApplicationLauncher.Instance.RemoveModApplication(appLauncherButton);
+            mouseOverVessel = over;
+
+            foreach (RecolourableSection section in selectedSections)
+                section.Glow(over);
+        }
+
+        protected void OnDestroy()
+        {
+            InputLockManager.RemoveControlLock("LazyPainterLock");
+            InputLockManager.RemoveControlLock("LazyPainterFlightLock");
+        }
+
+        public void Setup()
+        {
+            if (Ready)
+                return;
+
+            userHighlighterLimit = Highlighter.HighlighterLimit;
+            Highlighter.HighlighterLimit = 1f;
+            userInflightHighlight = GameSettings.INFLIGHT_HIGHLIGHT;
+            GameSettings.INFLIGHT_HIGHLIGHT = true;
+            foreach (Part part in PartsList)
+                part.SetHighlightType(Part.HighlightType.Disabled);
+
+            if (HighLogic.LoadedSceneIsFlight)
+            {
+                previousTimescale = Time.timeScale;
+                Time.timeScale = 0f;
+                GameEvents.onGamePause.Fire();
+                KinematicRigidbodies(true);
+            }
+
+            LockUI(true);
+
+            if (setupRoutine == default)
+                setupRoutine = StartCoroutine(SetupRoutine());
+        }
+
+        private IEnumerator SetupRoutine()
+        {
+            IEnumerator compilePartsEnumerator = Loading.FrameUnlockedCoroutine(PrepareParts());
+            while (compilePartsEnumerator.MoveNext())
+                yield return null;
+
+            setupRoutine = default;
+            Ready = true;
+        }
+
+        private IEnumerator PrepareParts()
+        {
+            int count = 0;
+            int total = PartsList.Count;
+            int capacity = PartsList.Count;
+
+            // get dictionary count via reflection
+            FieldInfo entriesField = typeof(Dictionary<Part, RecolourablePart>).GetField("entries", BindingFlags.NonPublic | BindingFlags.Instance);
+            int entries = ((ICollection)entriesField.GetValue(allRecolourables))?.Count ?? 0;
+
+            // Pre-allocate dictionary if it's too small.
+            if (entries < capacity)
+                allRecolourables = new Dictionary<Part, RecolourablePart>(capacity);
+
+            foreach (Part part in PartsList)
+            {
+                currentSetupPart = part;
+                RecolourablePart recolour = RecolourablePart.Create(part);
+
+                count++;
+                setupProgress = (float)count / total;
+                if (yieldOnLoad)
+                    yield return null;
+
+                if (recolour == null)
+                    continue;
+
+                allRecolourables.Add(part, recolour);
+            }
+
+            allSections = new HashSet<RecolourableSection>(allRecolourables.Values.Sum(p => p.sections.Length));
+            foreach (RecolourablePart recolour in allRecolourables.Values)
+                foreach (RecolourableSection section in recolour.sections)
+                    allSections.Add(section);
+        }
+
+        public void Cleanup()
+        {
+            if (!Ready || PartsList == null)
+                return;
+
+            Highlighter.HighlighterLimit = userHighlighterLimit;
+            GameSettings.INFLIGHT_HIGHLIGHT = userInflightHighlight;
+
+            foreach (Part part in PartsList)
+                part.SetHighlightDefault();
+
+            if (setupRoutine != default)
+                StopCoroutine(setupRoutine);
+
+            setupRoutine = default;
+            Ready = false;
+            setupProgress = 0;
+
+            //foreach (RecolourablePart recolour in allRecolourableParts)
+            foreach (RecolourablePart recolour in allRecolourables.Values)
+                Destroy(recolour);
+
+            allRecolourables.Clear();
+            allSections.Clear();
+            selectedSections.Clear();
+
+            LockUI(false);
+
+            if (HighLogic.LoadedSceneIsFlight)
+            {
+                KinematicRigidbodies(false);
+                Time.timeScale = previousTimescale;
+                GameEvents.onGameUnpause.Fire();
+                GameEvents.onVesselWasModified.Fire(FlightGlobals.ActiveVessel);
+            }
+        }
+
+        private void LockUI(bool locked)
+        {
+            // Lock controls.
+
+            if (locked)
+                InputLockManager.SetControlLock(controlLock, "LazyPainterLock");
+            else
+                InputLockManager.RemoveControlLock("LazyPainterLock");
+
+            if (HighLogic.LoadedSceneIsFlight)
+            {
+                // Hide the flight UI.
+
+                if (locked)
+                    InputLockManager.SetControlLock(ControlTypes.PAUSE | ControlTypes.STAGING | ControlTypes.VESSEL_SWITCHING | ControlTypes.MAP_TOGGLE, "LazyPainterFlightLock");
+                else
+                    InputLockManager.RemoveControlLock("LazyPainterFlightLock");
+
+                UIPartActionController.Instance.Show(!locked);
+
+                foreach (GameObject element in ActionGroupsFlightController.Instance.flightUI)
+                    element.SetActive(!locked);
+
+                if (PartItemTransfer.Instance)
+                    PartItemTransfer.Instance.Dismiss(PartItemTransfer.DismissAction.Cancelled, null);
+
+                if (CrewHatchController.fetch)
+                    CrewHatchController.fetch.ShowHatchTooltip(!locked);
+            }
+        }
+
+        private void KinematicRigidbodies(bool enable)
+        {
+            foreach (Part part in PartsList)
+                if (part.rb)
+                {
+                    part.rb.isKinematic = enable;
+                    if (!enable)
+                        part.rb.velocity = previousRbVelocity;
+                }
+
+            previousRbVelocity = FlightGlobals.ActiveVessel.rb_velocity;
         }
 
         #endregion
 
         #region Functions
 
-        void Selection()
+        public void SelectAll()
+        {
+            DeselectAll();
+
+            foreach (RecolourablePart recolPart in allRecolourables.Values)
+                selectedSections.UnionWith(recolPart.sections);
+
+            UpdateHighlighting();
+        }
+
+        public void DeselectAll() =>
+            selectedSections.Clear();
+
+        public void Select(RecolourableSection section) =>
+            section.Selection(s => selectedSections.Add(s));
+
+        public void EnqueueDeselect(RecolourableSection section) =>
+            section.Selection(s => deselectionQueue.Add(s));
+
+        public void DoDeselect()
+        {
+            selectedSections.ExceptWith(deselectionQueue);
+            deselectionQueue.Clear();
+        }
+
+        private struct ModifierState
+        {
+            public bool ctrl;
+            public bool shift;
+            public bool alt;
+
+            public static ModifierState Current()
+            {
+                ModifierState state = new ModifierState();
+                state.ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+                state.shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                state.alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+
+                return state;
+            }
+
+            public bool Equals(bool ctrl, bool shift, bool alt)
+            {
+                return this.ctrl == ctrl && this.shift == shift && this.alt == alt;
+            }
+        }
+
+        private void ForEachMatchingSection(IEnumerable list, bool findStock, RecoloringData matchColour, Action<RecolourableSection> del)
+        {
+            foreach (RecolourableSection section in list)
+            {
+                bool isStock = !section.RecolouringEnabled;
+                if (!findStock && isStock)
+                    continue;
+
+                if (findStock && isStock || !findStock && section.module.getSectionColors(string.Empty)[0].IsEqual(matchColour))
+                    del(section);
+            }
+        }
+
+        private void Selection()
         {
             // todo: throw this all out.
 
             if (Input.GetKeyDown(KeyCode.A) && Input.GetKey(KeyCode.LeftControl))
             {
-                selectedParts.Clear();
-                selectedParts.AddRange(PartsList);
-                UpdateHighlighting();
-                UpdateSwitchers();
+                SelectAll();
+                return;
             }
 
-            if (!(Input.GetMouseButtonUp(0) && !windowRect.Contains(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y))))
+            if (!Input.GetMouseButtonUp(0) || imgui.MouseOverUI())
                 return;
 
+            ModifierState modifiers = ModifierState.Current();
             Part hoveredPart = Mouse.HoveredPart;
 
             if (hoveredPart == null)
             {
                 // Clicked empty space without holding shift, clear selection
-                if (!Input.GetKey(KeyCode.LeftShift) && !Input.GetKey(KeyCode.RightShift))
+                if (!modifiers.shift)
                 {
-                    selectedParts.Clear();
+                    DeselectAll();
                     UpdateHighlighting();
-                    UpdateSwitchers();
                 }
 
                 return;
             }
+
+            if (!allRecolourables.TryGetValue(hoveredPart, out RecolourablePart hoveredRecolourablePart))
+                return;
+
+            hoveredRecolourablePart.GetSection(out RecolourableSection hoveredSection);
+            if (hoveredSection == null)
+                return;
 
             // Clicked an already selected part without holding anything down
-            if (!Input.GetKey(KeyCode.LeftShift) && !Input.GetKey(KeyCode.RightShift) && selectedParts.Count == 1 && selectedParts.Contains(hoveredPart))
+            if (modifiers.Equals(false, false, false) && selectedSections.Count == 1 && selectedSections.Contains(hoveredSection))
             {
-                selectedParts.Remove(hoveredPart);
-                UpdateHighlighting();
-                UpdateSwitchers();
-                return;
-            }
-
-            // Control click and shift click combined
-            if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) &&
-                (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)))
-            {
-                // Shift control click on an already selected part, remove all parts with the same name
-                if (selectedParts.Contains(hoveredPart))
-                {
-                    selectedParts.RemoveAll(p => p.name == hoveredPart.name);
-                }
-                // Shift control click on a new part, add all parts with the same name
-                else
-                {
-                    selectedParts.AddRange(PartsList.FindAll(p => p.name == hoveredPart.name));
-                }
+                foreach (RecolourableSection section in hoveredSection.host.sections)
+                    Select(section);
 
                 UpdateHighlighting();
-                UpdateSwitchers();
                 return;
             }
 
             // Control alt click.
-            if (Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.LeftAlt))
+            if (modifiers.Equals(true, false, true))
             {
-                RecolourablePartModule recolourablePartModule = GetRecolourableModule(hoveredPart);
-                if (recolourablePartModule == null)
-                    return;
-
-                RecoloringData[] matchColour = recolourablePartModule.GetSectionColors();
+                bool findStock = !hoveredSection.RecolouringEnabled;
+                RecoloringData matchColour = hoveredSection.module.getSectionColors(string.Empty)[0];
 
                 // Control alt click on an already selected part, remove all parts with the same colour.
-                if (selectedParts.Contains(hoveredPart))
+                if (selectedSections.Contains(hoveredSection))
                 {
-                    List<RecolourablePartModule> matching = switchers.FindAll(s => s.GetSectionColors()[0].IsEqual(matchColour[0]));
-                    selectedParts = selectedParts.Except(matching.Select(m => m.part)).ToList();
+                    ForEachMatchingSection(selectedSections, findStock, matchColour, EnqueueDeselect);
+                    DoDeselect();
                 }
                 // Control alt click on a new part, add all parts with the same colour.
                 else
-                {
-                    RecolourablePartModule module;
-
-                    foreach (Part p in PartsList)
-                    {
-                        module = GetRecolourableModule(p);
-                        if (module == null)
-                            continue;
-
-                        RecoloringData[] partColour = module.GetSectionColors();
-                        if (partColour[0].IsEqual(matchColour[0]))
-                            selectedParts.Add(p);
-                    }
-                }
+                    ForEachMatchingSection(allSections, findStock, matchColour, Select);
 
                 UpdateHighlighting();
-                UpdateSwitchers();
                 return;
             }
 
-            // Alt click
-            if (Input.GetKey(KeyCode.LeftAlt))
+            // Alt click.
+            if (modifiers.Equals(false, false, true))
             {
-                if (hoveredPart == null)
-                    return;
-
-                Eyedropper(Mouse.HoveredPart);
+                Eyedropper(hoveredSection);
                 return;
             }
 
-            // Control click
-            if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
+            float previousClickTime = lastClickTime;
+            lastClickTime = Time.realtimeSinceStartup;
+
+            // Control click or control shift click.
+            if (modifiers.Equals(true, false, false) || modifiers.Equals(true, true, false))
             {
-                // Control click on an already selected part, remove all parts with the same name
-                if (selectedParts.Contains(hoveredPart))
+                // control click on an already selected part, remove all parts with the same name
+                if (selectedSections.Contains(hoveredSection))
                 {
-                    selectedParts.RemoveAll(p => p.name == hoveredPart.name);
+                    foreach (RecolourableSection section in selectedSections)
+                        if (section.code.Equals(hoveredSection.code, StringComparison.OrdinalIgnoreCase))
+                            EnqueueDeselect(section);
+
+                    DoDeselect();
                 }
-                // Control click on a new part, add all parts with the same name
+                // control click on a new part, select all parts with the same name
                 else
                 {
-                    selectedParts.Clear();
-                    selectedParts.AddRange(PartsList.FindAll(p => p.name == hoveredPart.name));
+                    if (!modifiers.shift)
+                        DeselectAll();
+
+                    foreach (RecolourableSection section in allSections)
+                        if (section.code.Equals(hoveredSection.code, StringComparison.OrdinalIgnoreCase))
+                            Select(section);
                 }
 
                 UpdateHighlighting();
-                UpdateSwitchers();
                 return;
             }
 
             // Shift click
-            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+            if (modifiers.Equals(false, true, false))
             {
+                bool doubleClick = Time.realtimeSinceStartup - previousClickTime < 0.2f;
+
                 // Shift click on an already selected part, remove it
-                if (selectedParts.Contains(hoveredPart))
+                if (selectedSections.Contains(hoveredSection))
                 {
-                    selectedParts.Remove(hoveredPart);
+                    if (doubleClick && !hoveredSection.host.simple)
+                    {
+                        // Select siblings.
+                        foreach (RecolourableSection section in hoveredSection.host.sections)
+                            Select(section);
+                    }
+                    else
+                    {
+                        EnqueueDeselect(hoveredSection);
+                        DoDeselect();
+                    }
                 }
                 // Shift click on a new part, add it to the selection
                 else
                 {
-                    selectedParts.Add(hoveredPart);
+                    if (doubleClick && !hoveredSection.host.simple)
+                    {
+                        if (hoveredSection.host.sections.Count(s => !selectedSections.Contains(s)) == 1)
+                        {
+                            // Deselect siblings.
+                            foreach (RecolourableSection section in hoveredSection.host.sections)
+                                EnqueueDeselect(section);
+
+                            DoDeselect();
+                        }
+                        else
+                        {
+                            // Select siblings.
+                            foreach (RecolourableSection section in hoveredSection.host.sections)
+                                Select(section);
+                        }
+                    }
+                    else
+                        Select(hoveredSection);
                 }
 
                 UpdateHighlighting();
-                UpdateSwitchers();
                 return;
             }
 
             // Clicked an unselected part without holding anything down, clear selection and select the part
-            selectedParts.Clear();
-            selectedParts.Add(hoveredPart);
+            DeselectAll();
+            Select(hoveredSection);
             UpdateHighlighting();
-            UpdateSwitchers();
         }
 
-        void UpdateHighlighting()
+        private void UpdateHighlighting()
         {
-            IEnumerable<Part> nonselected = PartsList.Except(selectedParts);
-            foreach (Part part in nonselected)
+            foreach (RecolourableSection section in allSections)
             {
-                part.SetHighlightColor(Color.clear);
-                part.SetHighlightType(Part.HighlightType.Disabled);
-            }
+                bool enable = selectedSections.Contains(section);
+                section.Highlight(enable);
 
-            foreach (Part part in selectedParts)
-            {
-                part.SetHighlightColor(Color.white);
-                part.SetHighlightType(Part.HighlightType.AlwaysOn);
+                if (mouseOverVessel)
+                    section.Glow(enable);
             }
         }
 
-        void OnMouseOverUI(bool over)
-        {
-            foreach (Part part in selectedParts)
-            {
-                part.mpb.SetColor(PropertyIDs._RimColor, over ? Color.clear : Color.white);
-                part.GetPartRenderers().ToList().ForEach(r => r.SetPropertyBlock(part.mpb));
-            }
-        }
-
-        void UpdateSwitchers()
-        {
-            switchers.Clear();
-
-            KSPTextureSwitch[] textureSwitchers;
-            TUPartVariant[] partVariants;
-
-            foreach (Part part in selectedParts)
-            {
-                textureSwitchers = part.gameObject.GetComponents<KSPTextureSwitch>();
-                if (textureSwitchers.Length > 0)
-                {
-                    switchers.AddRange(textureSwitchers.Select(s => new RecolourablePartModule(s)));
-                }
-                else if ((partVariants = part.gameObject.GetComponents<TUPartVariant>()).Length > 0)
-                {
-                    switchers.AddRange(partVariants.Select(p => new RecolourablePartModule(p)));
-                }
-            }
-        }
-
-        void EnableTextures(bool enable)
+        public void EnableRecolouring(bool enable, bool apply = true)
         {
             //https://github.com/shadowmage45/TexturesUnlimited/blob/ff1a460262d3aae884fb54fb32e7864b4255531b/Plugin/SSTUTools/KSPShaderTools/GUI/CraftRecolorGUI.cs#L573
             //https://github.com/shadowmage45/TexturesUnlimited/blob/ff1a460262d3aae884fb54fb32e7864b4255531b/Plugin/SSTUTools/KSPShaderTools/Module/KSPTextureSwitch.cs#L124
             //https://github.com/shadowmage45/TexturesUnlimited/blob/ff1a460262d3aae884fb54fb32e7864b4255531b/Plugin/SSTUTools/KSPShaderTools/Util/Utils.cs#L802
 
+            // if !enable, set all selected back to stock and return.
+
             if (!enable)
             {
-                foreach (RecolourablePartModule switcher in switchers)
-                    switcher.Disable();
+                foreach (RecolourableSection section in selectedSections)
+                    section.Revert();
 
                 return;
             }
 
-            string textureName;
-            string partName;
-            string[] foundTextures = new string[switchers.Count];
-            string[] textureNames;
-            string nameLower;
+            // set all selected to recolourable.
 
-            for (int i = 0; i < switchers.Count; i++)
-            {
-                nameLower = switchers[i].CurrentTexture.ToLower();
-                if (textureWords.Any(w => nameLower.Contains(w)))
-                    continue;
+            foreach (RecolourableSection section in selectedSections)
+                section.Enable();
 
-                textureName = "";
-                partName = switchers[i].CurrentTexture;
-                if (partName == "")
-                    partName = switchers[i].part.name;
-
-                if (cache.TryGetValue(partName, out textureName))
-                {
-                    foundTextures[i] = textureName;
-
-                    continue;
-                }
-
-                textureNames = switchers[i].GetTextures();
-
-                foreach (string name in textureNames)
-                {
-                    nameLower = name.ToLower();
-                    if (textureWords.Any(w => nameLower.Contains(w)))
-                    {
-                        textureName = name;
-                        break;
-                    }
-                }
-
-                if (textureName == "" || textureName == null)
-                    continue;
-
-                if (partName != "")
-                    cache.Add(partName, textureName);
-
-                foundTextures[i] = textureName;
-            }
-
-            Debug.Log("Finished looking for textures.");
-
-            for (int i = 0; i < switchers.Count; i++)
-            {
-                if (foundTextures[i] == null)
-                    continue;
-
-                if (switchers[i].CurrentTexture == foundTextures[i])
-                    continue;
-
-                switchers[i].SetTexture(foundTextures[i]);
-            }
-
-            Debug.Log("Finished applying textures.");
-
-            ApplyAll();
+            if (enable && apply)
+                ApplyRecolouring();
         }
 
-        void ApplyAll()
+        public void ApplyRecolouring()
         {
-            int c;
-
-            foreach (RecolourablePartModule switcher in switchers)
+            RecoloringData[] apply = new RecoloringData[colourData.Length];
+            for (int i = 0; i < colourData.Length; i++)
             {
-                if (switcher == null)
-                    continue;
-
-                RecoloringData[] colours = switcher.GetSectionColors();
-
-                for (int i = 0; i < colours.Length; i++)
-                {
-                    c = selectionState[i] ? i : ((i == 2 && selectionState[1]) ? 1 : 0);
-
-                    colours[i].color = HSV255toRGB(coloursHSV[c]);
-                    colours[i].metallic = metals[c] / 255;
-                    colours[i].specular = speculars[c] / 255;
-                    colours[i].detail = details[c] / 100;
-                }
-
-                switcher.SetSectionColors(colours);
+                int slot = selectionState[i] ? i : ((i == 2 && selectionState[1]) ? 1 : 0);
+                apply[i] = (RecoloringData)colourData[slot];
             }
+
+            foreach (RecolourableSection section in selectedSections)
+                section?.module.setSectionColors(string.Empty, apply);
         }
 
-        RecolourablePartModule GetRecolourableModule(Part part)
-        {
-            if (part.TryGetComponent(out KSPTextureSwitch switcher))
-            {
-                return new RecolourablePartModule(switcher);
-            }
-            else if (part.TryGetComponent(out TUPartVariant partVariant))
-            {
-                return new RecolourablePartModule(partVariant);
-            }
-
-            return null;
-        }
-
-        void Eyedropper(Part originalPart)
+        public void Eyedropper(RecolourableSection section)
         {
 
-            RecolourablePartModule switcher = GetRecolourableModule(originalPart);
+            IRecolorable switcher = section.module;
             if (switcher == null)
                 return;
 
-            RecoloringData[] colours = switcher.GetSectionColors();
+            RecoloringData[] colours = switcher.getSectionColors(string.Empty);
 
-            coloursHSV = colours.Select(c => RGBtoHSV255(c.color)).ToArray();
-            coloursRGB = coloursHSV.Select(c => HSV255toRGB255(c)).ToArray();
+            for (int i = 0; i < colourData.Length; i++)
+                colourData[i] = colours[i];
 
-            metals = colours.Select(c => c.metallic * 255).ToArray();
-            speculars = colours.Select(c => c.specular * 255).ToArray();
-            details = colours.Select(c => c.detail * 100).ToArray();
             selectionState = new bool[] {
                 true,
                 !colours[0].IsEqual(colours[1]),
                 !colours[1].IsEqual(colours[1]) && !colours[0].IsEqual(colours[2])
             };
 
-            StartCoroutine(HighlightPart(originalPart));
-
-            UpdateColourBoxes();
-            ApplyAll();
+            StartCoroutine(FlashSection(section));
+            imgui.Refresh();
+            ApplyRecolouring();
         }
 
-        IEnumerator HighlightPart(Part part)
+        public IEnumerator FlashSection(RecolourableSection section)
         {
-            part.highlighter.FlashingOn();
+            section.Highlighter.FlashingOn();
 
-            yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSecondsRealtime(0.5f);
 
-            part.highlighter.FlashingOff();
+            section.Highlighter.FlashingOff();
         }
 
-        void SaveColour(string name)
+        public RecoloringDataPreset ExportColourPreset() =>
+            (RecoloringDataPreset)colourData[editingColour];
+
+        public void PrintDebug()
         {
-            // Add the custom colour to the preset group.
-
-            RecoloringDataPreset preset = new RecoloringDataPreset();
-            preset.color = HSV255toRGB(coloursHSV[editingColour]);
-            preset.metallic = metals[editingColour] / 255;
-            preset.specular = speculars[editingColour] / 255;
-            //preset.detail = details[editingColour] / 100;
-            preset.title = name;
-            preset.name = preset.title.Replace(" ", "").ToLower();
-
-            RecoloringDataPresetGroup customGroup = PresetColor.getGroupList().Find(g => g.name == "Custom");
-
-            if (customGroup == null)
-                AddCustomGroup();
-
-            List<RecoloringDataPreset> group = customGroup.colors;
-            int index;
-            if ((index = group.FindIndex(p => p.name == preset.name)) != -1)
-            {
-                group[index] = preset;
-            }
-            else
-            {
-                group.Add(preset);
-            }
-
-
-            // Serialise the custom preset to a file for the next time the game is loaded.
-
-            string kspRoot = KSPUtil.ApplicationRootPath;
-            string modPath = Path.Combine(kspRoot, "GameData", "LazyPainter");
-            string filePath = Path.Combine(modPath, "customColours" + ".cfg");
-
-            ConfigNode file;
-
-            Debug.Log("SaveColour: " + name);
-
-            if (File.Exists(filePath))
-                file = ConfigNode.Load(filePath);
-            else
-                file = new ConfigNode();
-
-            ConfigNode[] groups = file.GetNodes("PRESET_COLOR_GROUP");
-            ConfigNode groupsNode = groups.FirstOrDefault(g => g.GetValue("name") == "Custom");
-            if (groupsNode == null)
-            {
-                groupsNode = new ConfigNode("PRESET_COLOR_GROUP");
-                file.AddNode(groupsNode);
-                groupsNode.SetValue("name", "Custom", true);
-            }
-
-            ConfigNode colourPreset = file.GetNodes("KSP_COLOR_PRESET").FirstOrDefault(n => n.GetValue("name") == preset.name);
-            if (colourPreset == null)
-            {
-                colourPreset = new ConfigNode("KSP_COLOR_PRESET");
-                file.AddNode(colourPreset);
-            }
-            colourPreset.SetValue("name", preset.name, true);
-            colourPreset.SetValue("title", preset.title, true);
-            colourPreset.SetValue("color", String.Join(", ", RGBtoRGB255(preset.color)), true);
-            colourPreset.SetValue("metallic", Mathf.RoundToInt(preset.metallic * 255), true);
-            colourPreset.SetValue("specular", Mathf.RoundToInt(preset.specular * 255), true);
-
-            if (!groupsNode.GetValues("color").Contains(preset.name))
-                groupsNode.AddValue("color", preset.name);
-
-            file.Save(filePath);
-        }
-
-        void DeletePreset(int customIndex)
-        {
-            // Remove from custom group.
-
-            RecoloringDataPresetGroup customGroup = PresetColor.getGroupList().Find(g => g.name == "Custom");
-            if (customGroup == null)
-                return;
-
-            RecoloringDataPreset preset = customGroup.colors[customIndex];
-            customGroup.colors.RemoveAt(customIndex);
-
-            // Remove from file.
-
-            string kspRoot = KSPUtil.ApplicationRootPath;
-            string modPath = Path.Combine(kspRoot, "GameData", "LazyPainter");
-            string filePath = Path.Combine(modPath, "customColours" + ".cfg");
-
-            ConfigNode file;
-
-            Debug.Log("Delete Colour: " + name);
-
-            if (File.Exists(filePath))
-                file = ConfigNode.Load(filePath);
-            else
-                return;
-
-            ConfigNode[] groups = file.GetNodes("PRESET_COLOR_GROUP");
-            ConfigNode groupsNode = groups.FirstOrDefault(g => g.GetValue("name") == "Custom");
-            if (groupsNode == null)
-                return;
-
-            ConfigNode colourPreset = file.GetNodes("KSP_COLOR_PRESET").FirstOrDefault(n => n.GetValue("name") == preset.name);
-            if (colourPreset == null)
-                return;
-
-            file.RemoveNode(colourPreset);
-
-            int index = groupsNode.GetValues().ToList().FindIndex(n => n == preset.name);
-            if (index != -1)
-                groupsNode.values.Remove(groupsNode.values[index]);
-
-            file.Save(filePath);
-        }
-
-        void AddCustomGroup()
-        {
-            RecoloringDataPresetGroup customGroup = new RecoloringDataPresetGroup("Custom");
-            customGroup.colors = new List<RecoloringDataPreset>();
-            PresetColor.getGroupList().Add(customGroup);
-
-            FieldInfo groupsField = typeof(PresetColor).GetField("presetGroups", BindingFlags.Static | BindingFlags.NonPublic);
-            Dictionary<string, RecoloringDataPresetGroup> presetGroups = (Dictionary<string, RecoloringDataPresetGroup>)groupsField.GetValue(null);
-            presetGroups.Add("Custom", customGroup);
-        }
-
-        #endregion
-
-        #region Helper Functions
-
-        private Color HSV255toRGBA(float[] HSV, float alpha)
-        {
-            Color rgb = HSV255toRGB(HSV);
-            rgb.a = alpha;
-
-            return rgb;
-        }
-
-        private Color HSV255toRGB(float[] HSV)
-        {
-            return Color.HSVToRGB(HSV[0] / 255, HSV[1] / 255, HSV[2] / 255);
-        }
-
-        static float[] RGBtoHSV255(Color rgb)
-        {
-            Color.RGBToHSV(rgb, out float h, out float s, out float v);
-            return new float[] { h * 255, s * 255, v * 255 };
-        }
-
-        static float[] RGB255toHSV255(float[] RGB)
-        {
-            Color rgb = new Color(RGB[0] / 255, RGB[1] / 255, RGB[2] / 255);
-            Color.RGBToHSV(rgb, out float h, out float s, out float v);
-
-            return new float[] { Mathf.Round(h * 255), Mathf.Round(s * 255), Mathf.Round(v * 255) };
-        }
-
-        static float[] HSV255toRGB255(float[] HSV)
-        {
-            Color rgb = Color.HSVToRGB(HSV[0] / 255, HSV[1] / 255, HSV[2] / 255);
-
-            return new float[] { Mathf.Round(rgb.r * 255), Mathf.Round(rgb.g * 255), Mathf.Round(rgb.b * 255) };
-        }
-
-        static int[] RGBtoRGB255(Color color)
-        {
-            return new int[] {
-                Mathf.RoundToInt(color.r * 255),
-                Mathf.RoundToInt(color.g * 255),
-                Mathf.RoundToInt(color.b * 255)
-            };
-        }
-
-        #endregion
-
-        #region GUI
-
-        public void DrawGUI()
-        {
-            // Keep window inside screen space.
-            windowRect.position = new Vector2(
-                Mathf.Clamp(windowRect.position.x, 0, Screen.width - windowRect.width),
-                Mathf.Clamp(windowRect.position.y, 0, Screen.height - windowRect.height)
-            );
-
-            windowRect = GUILayout.Window(windowID, windowRect, FillWindow, "Lazy Painter", GUILayout.Height(1), GUILayout.Width(windowWidth));
-            clickBlocker.UpdateRect(windowRect);
-        }
-
-        private void FillWindow(int windowID)
-        {
-            bool lockedScroll = false;
-            if (windowRect.Contains(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y)))
-            {
-                lockedScroll = true;
-                scrollLock = true;
-                InputLockManager.SetControlLock(ControlTypes.CAMERACONTROLS, "LazyPainterScrollLock");
-            }
-
-            if (GUI.Button(new Rect(windowRect.width - 18, 2, 16, 16), ""))
-                DisableGui();
-
-            if (boxStyle == null)
-                InitStyles();
-
-            if (GUI.Button(new Rect(windowRect.width - (18 * 2), 2, 16, 16), "?", questionStyle))
-                showHelp = !showHelp;
-
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            int partsCount = selectedParts.Count;
-            switch (partsCount)
-            {
-                case 0:
-                    GUILayout.Label("Nothing selected.", boxStyle);
-                    break;
-                case 1:
-                    GUILayout.Label("1 part selected.", boxStyle);
-                    break;
-                default:
-                    GUILayout.Label(partsCount + " parts selected.", boxStyle);
-                    break;
-            }
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-
-            if (GUILayout.Button("Stock"))
-                EnableTextures(false);
-
-            if (GUILayout.Button("Paint"))
-                EnableTextures(true);
-
-            GUILayout.EndHorizontal();
-
-            // Colour slot section.
-
-            GUILayout.BeginVertical(boxStyle);
-            int oldEditingColour = editingColour;
-            string[] disabledStrings = new string[] { "", "", "" };
-            editingColour = GUILayout.SelectionGrid(editingColour, disabledStrings, 3, GUILayout.Width(windowWidth), GUILayout.Height(50));
-
-            if (GUI.changed && editingColour != 0)
-            {
-                if (Input.GetMouseButtonUp(1))
-                {
-                    selectionState[editingColour] = !selectionState[editingColour];
-                    editingColour = editingColour == oldEditingColour ? 0 : oldEditingColour;
-                }
-                else if (!selectionState[editingColour])
-                {
-                    selectionState[editingColour] = true;
-                }
-
-                UpdateColourBoxes();
-                ApplyAll();
-            }
-
-            int colourWidth = 85;
-            int verticalOffset = 82; //79 54
-            for (int i = 0; i < 3; i++)
-                GUI.DrawTexture(new Rect(20 + (i * (16 + colourWidth)), verticalOffset, colourWidth, 39), colourTextures[i], ScaleMode.StretchToFill, true);
-
-
-            // Colour slider section.
-
-            bool update = false;
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(100);
-            colourMode = GUILayout.SelectionGrid(colourMode, colourModes, 2);
-            GUILayout.Space(100);
-            GUILayout.EndHorizontal();
-
-            if (!UseRGB)
-            {
-                SliderSetting("Hue", ref coloursHSV[editingColour][0], 0, 255, 0, ref update);
-                SliderSetting("Saturation", ref coloursHSV[editingColour][1], 0, 255, 0, ref update);
-                SliderSetting("Value", ref coloursHSV[editingColour][2], 0, 255, 0, ref update);
-            }
-            else
-            {
-                SliderSetting("Red", ref coloursRGB[editingColour][0], 0, 255, 0, ref update);
-                SliderSetting("Green", ref coloursRGB[editingColour][1], 0, 255, 0, ref update);
-                SliderSetting("Blue", ref coloursRGB[editingColour][2], 0, 255, 0, ref update);
-            }
-
-            // Material slider section.
-
-            GUI.color = Color.grey;
-            GUILayout.Label("-------------");
-            GUI.color = Color.white;
-
-            SliderSetting("Specular", ref speculars[editingColour], 0, 255, 0, ref update);
-            SliderSetting("Metallic", ref metals[editingColour], 0, 255, 0, ref update);
-            SliderSetting("Detail", ref details[editingColour], 0, 500, 0, ref update);
-
-            GUI.color = Color.grey;
-            GUILayout.Label("-------------");
-            GUI.color = Color.white;
-
-            showPresetColours = GUILayout.Toggle(showPresetColours, "Colour Presets", buttonStyle);
-            if (showPresetColours)
-                DrawPresetSection(ref update);
-
-            if (update)
-            {
-                if (UseRGB)
-                    coloursHSV[editingColour] = RGB255toHSV255(coloursRGB[editingColour]);
-                else
-                    coloursRGB[editingColour] = HSV255toRGB255(coloursHSV[editingColour]);
-
-                UpdateColourBoxes();
-                ApplyAll();
-            }
-
-            GUILayout.EndVertical();
-
-            if (showHelp)
-            {
-                GUILayout.BeginHorizontal(boxStyle);
-                GUILayout.BeginHorizontal(boxStyle);
-                GUILayout.Label("Click on parts to select them." +
-                    "\n\n<b>Control click</b> a part to select all parts of that type. " +
-                    "\n\n<b>Shift click</b> to add more parts to the selection. " +
-                    "\n\n<b>Control alt click</b> a part to select all parts that share the same primary colour. " +
-                    "\n\nPress <b>control + A</b> to select all parts. " +
-                    "\n\nClick anywhere to clear the selection. " +
-                    "\n\n<b>Alt click</b> a part to copy its colours to the palette. " +
-                    "\n\nClick <b>'Paint'</b> to activate recolouring for the selected parts. " +
-                    "\n\nRight click a colour slot to enable/disable it.");
-                GUILayout.EndVertical();
-                GUILayout.EndVertical();
-            }
-
-            GUI.DragWindow(new Rect(0, 0, 10000, 500));
-
-            if (!lockedScroll && scrollLock)
-            {
-                InputLockManager.RemoveControlLock("LazyPainterScrollLock");
-            }
-        }
-
-        private void InitStyles()
-        {
-            boxStyle = GUI.skin.GetStyle("Box");
-
-            colourTextures = new Texture2D[]
-            {
-                new Texture2D(1, 1, TextureFormat.RGBA32, false),
-                new Texture2D(1, 1, TextureFormat.RGBA32, false),
-                new Texture2D(1, 1, TextureFormat.RGBA32, false),
-            };
-
-            UpdateColourBoxes();
-
-            questionStyle = new GUIStyle(GUI.skin.GetStyle("Button"));
-            questionStyle.fontSize = 10;
-            questionStyle.alignment = TextAnchor.MiddleCenter;
-
-            nonWrappingLabelStyle = new GUIStyle(GUI.skin.button);
-            nonWrappingLabelStyle.wordWrap = false;
-            nonWrappingLabelStyle.clipping = TextClipping.Overflow;
-            nonWrappingLabelStyle.fontSize = 12;
-
-            squareButtonStyle = new GUIStyle(GUI.skin.box);
-            squareButtonStyle.fontSize = 200;
-            squareButtonStyle.alignment = TextAnchor.MiddleCenter;
-
-            buttonStyle = GUI.skin.button;
-
-            colourSlotStyle = new GUIStyle(GUI.skin.button);
-            colourSlotStyle.fontSize = 400;
-            colourSlotStyle.alignment = TextAnchor.MiddleCenter;
-
-            textBoxStyle = new GUIStyle(GUI.skin.textField);
-            textBoxStyle.alignment = TextAnchor.MiddleCenter;
-        }
-
-        private void UpdateColourBoxes()
-        {
-            for (int i = 0; i < colourTextures.Length; i++)
-            {
-                colourTextures[i].SetPixel(0, 0, HSV255toRGBA(coloursHSV[i], selectionState[i] ? 1f : 0.15f));
-                colourTextures[i].Apply();
-            }
-        }
-
-        void SliderSetting(string name, ref float setting, float min, float max, int rounding, ref bool update)
-        {
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(3);
-            GUILayout.Label(name, GUILayout.Width(70));
-
-            float old = setting;
-
-            // Slider
-            setting = (float)Math.Round(GUILayout.HorizontalSlider(setting, min, max), rounding);
-
-            // Box
-            string text = GUILayout.TextField(setting.ToString(), textBoxStyle, GUILayout.Width(windowWidth / 8));
-            if (float.TryParse(text, out float result))
-                setting = result;
-            else if (text == "")
-                setting = 0;
-
-            update = update || (old != setting);
-
-            GUILayout.Space(3);
-            GUILayout.EndHorizontal();
-        }
-
-        void DrawPresetSection(ref bool update)
-        {
-            // Group selection.
-
-            GUILayout.BeginHorizontal();
-
-            if (GUILayout.Button("<", GUILayout.Width(20)))
-            {
-                groupIndex--;
-                List<RecoloringDataPresetGroup> gs = PresetColor.getGroupList();
-                if (groupIndex < 0) { groupIndex = gs.Count - 1; }
-                groupName = gs[groupIndex].name;
-            }
-
-            GUILayout.Box(groupName, GUILayout.Width(100));
-
-            if (GUILayout.Button(">", GUILayout.Width(20)))
-            {
-                groupIndex++;
-                List<RecoloringDataPresetGroup> gs = PresetColor.getGroupList();
-                if (groupIndex >= gs.Count) { groupIndex = 0; }
-                groupName = gs[groupIndex].name;
-            }
-
-            // Saving.
-
-            if (groupName == "Custom")
-            {
-                presetSaveString = GUILayout.TextField(presetSaveString);
-            }
-            else
-            {
-                GUI.enabled = false;
-                GUILayout.TextField("");
-            }
-
-            if (GUILayout.Button("Save", GUILayout.Width(50)))
-                SaveColour(presetSaveString);
-
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-
-            // Preset colours.
-
-            GUILayout.BeginVertical(boxStyle);
-
-            presetColorScrollPos = GUILayout.BeginScrollView(presetColorScrollPos, false, true, GUILayout.Height(200f));
-            Color old = GUI.color;
-            Color guiColor = old;
-            List<RecoloringDataPreset> presetColors = PresetColor.getColorList(groupName);
-
-            GUILayout.BeginHorizontal();
-
-            int len = presetColors.Count;
-            for (int i = 0; i < len; i++)
-            {
-                if (i > 0 && i % 2 == 0)
-                {
-                    GUILayout.EndHorizontal();
-                    GUILayout.BeginHorizontal();
-                }
-
-                if (GUILayout.Button(Truncate(presetColors[i].title, 18), nonWrappingLabelStyle, GUILayout.Width(112)))
-                {
-                    if (Input.GetMouseButtonUp(1) && groupName == "Custom")
-                    {
-                        deleteForm = true;
-                        deleteIndex = i;
-                        deleteTitle = presetColors[i].title;
-                    }
-                    //else if (Input.GetKey(KeyCode.LeftAlt) && groupName == "Custom")
-                    //{
-                    //}
-                    else
-                    {
-                        EnableTextures(true);
-
-                        if (groupName == "Custom")
-                            presetSaveString = presetColors[i].title;
-
-                        RecoloringData editingColor = presetColors[i].getRecoloringData();
-
-                        coloursHSV[editingColour] = RGBtoHSV255(editingColor.color);
-                        coloursRGB[editingColour] = HSV255toRGB255(coloursHSV[editingColour]);
-                        speculars[editingColour] = editingColor.specular * 255f;
-                        metals[editingColour] = editingColor.metallic * 255f;
-                        //details[editingColour] = editingColor.detail * 100f;
-
-                        update = true;
-                    }
-                }
-
-                guiColor = presetColors[i].color;
-                guiColor.a = 1f;
-                GUI.color = guiColor;
-                GUILayout.Box("■", squareButtonStyle, GUILayout.Width(20), GUILayout.Height(20));
-                GUI.color = old;
-            }
-
-            GUILayout.EndHorizontal();
-            GUILayout.EndScrollView();
-            GUI.color = old;
-            GUILayout.EndVertical();
-
-            if (deleteForm)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.FlexibleSpace();
-                GUILayout.Label($"Delete the preset '{deleteTitle}'?");
-                GUILayout.FlexibleSpace();
-                GUILayout.EndHorizontal();
-
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Yes"))
-                {
-                    DeletePreset(deleteIndex);
-                    deleteForm = false;
-                }
-                if (GUILayout.Button("No"))
-                {
-                    deleteForm = false;
-                }
-                GUILayout.EndHorizontal();
-            }
-        }
-
-        public string Truncate(string text, int max)
-        {
-            return text.Length <= max ? text : text.Substring(0, max - 3).Trim() + "...";
-        }
-
-        public void AddToolbarButton()
-        {
-            if (appLauncherButton != null)
-                return;
-
-            ApplicationLauncher.AppScenes scenes = ApplicationLauncher.AppScenes.SPH | ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.FLIGHT;
-            Texture buttonTexture = GameDatabase.Instance.GetTexture("LazyPainter/Textures/icon", false);
-            appLauncherButton = ApplicationLauncher.Instance.AddModApplication(EnableGui, DisableGui, null, null, null, null, scenes, buttonTexture);
-        }
-
-        void ToggleGui()
-        {
-            if (guiEnabled)
-                DisableGui();
-            else
-                EnableGui();
-        }
-
-        public void LockUI(bool locked)
-        {
-            // Lock controls.
-
-            if (locked)
-                InputLockManager.SetControlLock(controlLock, "LazyPainterGUILock");
-            else
-                InputLockManager.RemoveControlLock("LazyPainterGUILock");
-
-            // Cause the parts list to slide out.
-
-            if (HighLogic.LoadedSceneIsEditor && EditorLogic.fetch.editorScreen == EditorScreen.Parts)
-            {
-                EditorLogic.fetch.UpdateUI();
-                string stateType = locked ? "Out" : "In";
-
-                EditorToolsUI toolsUI = EditorLogic.fetch.toolsUI;
-                if (toolsUI != null && toolsUI.gameObject.activeInHierarchy)
-                    toolsUI.panelTransition?.Transition(stateType);
-
-                EditorPartList.Instance.GetComponent<UIPanelTransition>()?.Transition(stateType);
-                EditorPanels.Instance.searchField.Transition(stateType);
-            }
-        }
-
-        void EnableGui()
-        {
-            LockUI(true);
-
-            userHighlighterLimit = Highlighter.HighlighterLimit;
-            Highlighter.HighlighterLimit = 1f;
-
-            List<Part> parts = PartsList;
-            foreach (Part part in parts)
-            {
-                part.SetHighlightType(Part.HighlightType.Disabled);
-
-                part.mpb.SetFloat(PropertyIDs._RimFalloff, rimFallOff);
-                part.GetPartRenderers().ToList().ForEach(r => r.SetPropertyBlock(part.mpb));
-            }
-
-            // check if the custom group exists
-            if (!PresetColor.getGroupList().Exists(x => x.name == "Custom"))
-                AddCustomGroup();
-
-            guiEnabled = true;
-
-            if (appLauncherButton.toggleButton.CurrentState == UIRadioButton.State.False)
-                appLauncherButton.SetTrue(false);
-
-            clickBlocker.Blocking = true;
-        }
-
-        void DisableGui()
-        {
-            guiEnabled = false;
-
-            LockUI(false);
-            InputLockManager.RemoveControlLock("LazyPainterScrollLock");
-            Highlighter.HighlighterLimit = userHighlighterLimit;
-
-            List<Part> parts = PartsList;
-            foreach (Part part in parts)
-            {
-                part.mpb.SetFloat(PropertyIDs._RimFalloff, 2f);
-                part.SetHighlightDefault();
-            }
-
-            if (appLauncherButton.toggleButton.CurrentState == KSP.UI.UIRadioButton.State.True)
-                appLauncherButton.SetFalse(false);
-
-            clickBlocker.Blocking = false;
+            // Group all sections by code and print counts for each code.
+            allSections.GroupBy(s => s.code).OrderBy(g => g.Count()).ToList().ForEach(g => Debug.Log($"{g.Key}: {g.Count()}"));
         }
 
         #endregion
