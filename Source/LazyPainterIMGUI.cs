@@ -8,6 +8,7 @@ using UnityEngine;
 
 namespace LazyPainter
 {
+    [Settings(category = "UI")]
     public class LazyPainterIMGUI : MonoBehaviour
     {
         public static string windowTitle;
@@ -29,6 +30,7 @@ namespace LazyPainter
         private static GUIStyle squareButtonStyle;
         private static GUIStyle buttonStyle;
         private static GUIStyle textBoxStyle;
+        private static GUIStyle topButtonStyle;
 
         // Scroll.
         private Vector2 presetColorScrollPos;
@@ -38,6 +40,7 @@ namespace LazyPainter
         public static bool showPresetColours = false;
         public bool showHelp = false;
         public bool showDebug = false;
+        public bool showSettings = false;
 
         // Colour slot textures.
         private static Texture2D[] colourTextures;
@@ -54,6 +57,10 @@ namespace LazyPainter
         private int deleteIndex;
         private bool deleteForm = false;
         private string deleteTitle;
+
+        // Serialised settings.
+        [Setting] public static bool display255 = true;
+        [Setting] public static bool buttonInFlight = true;
 
         public static LazyPainterIMGUI Create(LazyPainter lazyPainter)
         {
@@ -100,7 +107,7 @@ namespace LazyPainter
             if (!init)
                 return;
 
-            if (appLauncherButton.toggleButton.CurrentState == UIRadioButton.State.False)
+            if (appLauncherButton && appLauncherButton.toggleButton.CurrentState == UIRadioButton.State.False)
                 appLauncherButton.SetTrue(false);
 
             clickBlocker.Blocking = true;
@@ -114,7 +121,7 @@ namespace LazyPainter
             if (!init)
                 return;
 
-            if (appLauncherButton.toggleButton.CurrentState == UIRadioButton.State.True)
+            if (appLauncherButton && appLauncherButton.toggleButton.CurrentState == UIRadioButton.State.True)
                 appLauncherButton.SetFalse(false);
 
             clickBlocker.Blocking = false;
@@ -122,6 +129,7 @@ namespace LazyPainter
             OnUIChanged(false);
 
             lp.Cleanup();
+            GlobalSettings.Save();
         }
 
         protected void OnDestroy()
@@ -145,7 +153,7 @@ namespace LazyPainter
             enabled = false;
 
         private void OnEditorScreenChange(EditorScreen data) =>
-            appLauncherButton.gameObject.SetActive(data == EditorScreen.Parts);
+            appLauncherButton?.gameObject.SetActive(data == EditorScreen.Parts);
 
         private void OnEditorRestart() =>
             Close();
@@ -184,6 +192,44 @@ namespace LazyPainter
         public bool MouseOverUI() =>
             windowRect.Contains(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y));
 
+        private void HelpSection()
+        {
+            GUILayout.BeginHorizontal(boxStyle);
+            GUILayout.BeginHorizontal(boxStyle);
+            GUILayout.Label("Click on parts to select them." +
+                "\n\n<b>Control click</b> a part to select all parts of that type. " +
+                "\n\n<b>Shift click</b> to add more parts to the selection. " +
+                "\n\n<b>Control alt click</b> a part to select all parts that share the same primary colour. " +
+                "\n\nPress <b>control + A</b> to select all parts. " +
+                "\n\nClick anywhere to clear the selection. " +
+                "\n\n<b>Alt click</b> a part to copy its colours to the palette. " +
+                "\n\nClick <b>'Paint'</b> to activate recolouring for the selected parts. " +
+                "\n\nRight click a colour slot to enable/disable it.");
+            GUILayout.EndHorizontal();
+            GUILayout.EndHorizontal();
+        }
+
+        private void SettingsSection()
+        {
+            GUILayout.BeginVertical(boxStyle);
+            display255 = GUILayout.Toggle(display255, "Display values from 0 to 255.");
+            buttonInFlight = GUILayout.Toggle(buttonInFlight, "Show app button in flight (after next scene load).");
+            GUILayout.EndVertical();
+        }
+
+        private void DebugSection()
+        {
+            GUILayout.Label("Selection Debug:");
+
+            foreach (RecolourableSection section in lp.selectedSections)
+            {
+                if (section == null)
+                    continue;
+
+                GUILayout.Label($"{section.name} on {section.host.part.partInfo.title}", boxStyle);
+            }
+        }
+
         private void FillWindow(int windowID)
         {
             // Scroll lock when hovering over the window.
@@ -197,16 +243,26 @@ namespace LazyPainter
             }
 
             // Close button.
-            if (GUI.Button(new Rect(windowRect.width - 18, 2, 16, 16), ""))
+            if (GUI.Button(new Rect(windowRect.width - 18, 2, 16, 16), "x", topButtonStyle))
                 Close();
 
             // Style initialisation.
             if (boxStyle == null)
                 InitStyles();
 
+            // Settings button.
+            if (GUI.Button(new Rect(windowRect.width - (18 * 2), 2, 16, 16), "s", topButtonStyle))
+            {
+                showSettings = !showSettings;
+                showHelp = false;
+            }
+
             // Help button.
-            if (GUI.Button(new Rect(windowRect.width - (18 * 2), 2, 16, 16), "?", questionStyle))
+            if (GUI.Button(new Rect(windowRect.width - (18 * 3), 2, 16, 16), "i", questionStyle))
+            {
                 showHelp = !showHelp;
+                showSettings = false;
+            }
 
             // Main section or loading screen.
             if (lp.Ready)
@@ -216,38 +272,18 @@ namespace LazyPainter
 
             // Help section.
             if (showHelp)
-            {
-                GUILayout.BeginHorizontal(boxStyle);
-                GUILayout.BeginHorizontal(boxStyle);
-                GUILayout.Label("Click on parts to select them." +
-                    "\n\n<b>Control click</b> a part to select all parts of that type. " +
-                    "\n\n<b>Shift click</b> to add more parts to the selection. " +
-                    "\n\n<b>Control alt click</b> a part to select all parts that share the same primary colour. " +
-                    "\n\nPress <b>control + A</b> to select all parts. " +
-                    "\n\nClick anywhere to clear the selection. " +
-                    "\n\n<b>Alt click</b> a part to copy its colours to the palette. " +
-                    "\n\nClick <b>'Paint'</b> to activate recolouring for the selected parts. " +
-                    "\n\nRight click a colour slot to enable/disable it.");
-                GUILayout.EndVertical();
-                GUILayout.EndVertical();
-            }
+                HelpSection();
+
+            // Settings.
+            if (showSettings)
+                SettingsSection();
 
             // Debug section.
-            if (GUILayout.Button(showDebug ? "Show Debug" : "Hide Debug"))
-                showDebug = !showDebug;
+            //if (GUILayout.Button(showDebug ? "Show Debug" : "Hide Debug"))
+            //    showDebug = !showDebug;
 
             if (showDebug && lp.selectedSections.Count > 0)
-            {
-                GUILayout.Label("Selection Debug:");
-
-                foreach (RecolourableSection section in lp.selectedSections)
-                {
-                    if (section == null)
-                        continue;
-
-                    GUILayout.Label($"{section.name} on {section.host.part.partInfo.title}", boxStyle);
-                }
-            }
+                DebugSection();
 
             // End window and release scroll lock.
             GUI.DragWindow(new Rect(0, 0, 10000, 500));
@@ -330,17 +366,24 @@ namespace LazyPainter
             GUILayout.Space(100);
             GUILayout.EndHorizontal();
 
+            ModalColour editingColour = lp.colourData[lp.editingColour];
+            float scalar = display255 ? 255 : 1;
+
             if (!UseRGB)
             {
-                SliderSetting("Hue", ref lp.coloursHSV[lp.editingColour][0], 0, 255, 0, ref update);
-                SliderSetting("Saturation", ref lp.coloursHSV[lp.editingColour][1], 0, 255, 0, ref update);
-                SliderSetting("Value", ref lp.coloursHSV[lp.editingColour][2], 0, 255, 0, ref update);
+                HSV hsv = editingColour.HSV;
+                SliderSetting("Hue", ref hsv.hue, 0, 1f, ref update, scalar);
+                SliderSetting("Saturation", ref hsv.saturation, 0, 1f, ref update, scalar);
+                SliderSetting("Value", ref hsv.value, 0, 1f, ref update, scalar);
+                if (update) editingColour.HSV = hsv;
             }
             else
             {
-                SliderSetting("Red", ref lp.coloursRGB[lp.editingColour][0], 0, 255, 0, ref update);
-                SliderSetting("Green", ref lp.coloursRGB[lp.editingColour][1], 0, 255, 0, ref update);
-                SliderSetting("Blue", ref lp.coloursRGB[lp.editingColour][2], 0, 255, 0, ref update);
+                Color colour = editingColour.Colour;
+                SliderSetting("Red", ref colour.r, 0, 1f, ref update, scalar);
+                SliderSetting("Green", ref colour.g, 0, 1f, ref update, scalar);
+                SliderSetting("Blue", ref colour.b, 0, 1f, ref update, scalar);
+                if (update) editingColour.Colour = colour;
             }
 
             // Material slider section.
@@ -349,9 +392,9 @@ namespace LazyPainter
             GUILayout.Label("-------------");
             GUI.color = Color.white;
 
-            SliderSetting("Specular", ref lp.speculars[lp.editingColour], 0, 255, 0, ref update);
-            SliderSetting("Metallic", ref lp.metals[lp.editingColour], 0, 255, 0, ref update);
-            SliderSetting("Detail", ref lp.details[lp.editingColour], 0, 500, 0, ref update);
+            SliderSetting("Specular", ref editingColour.specular, 0, 1f, ref update, scalar);
+            SliderSetting("Metallic", ref editingColour.metallic, 0, 1f, ref update, scalar);
+            SliderSetting("Detail", ref editingColour.detail, 0, 5f, ref update, display255 ? 100 : 1);
 
             GUI.color = Color.grey;
             GUILayout.Label("-------------");
@@ -361,15 +404,11 @@ namespace LazyPainter
 
             showPresetColours = GUILayout.Toggle(showPresetColours, "Colour Presets", buttonStyle);
             if (showPresetColours)
-                DrawPresetSection(ref update);
+                DrawPresetSection(ref update, ref editingColour);
 
             if (update)
             {
-                if (UseRGB)
-                    lp.coloursHSV[lp.editingColour] = Colour.RGB255toHSV255(lp.coloursRGB[lp.editingColour]);
-                else
-                    lp.coloursRGB[lp.editingColour] = Colour.HSV255toRGB255(lp.coloursHSV[lp.editingColour]);
-
+                lp.colourData[lp.editingColour] = editingColour;
                 UpdateColourBoxes();
                 lp.ApplyRecolouring();
             }
@@ -410,10 +449,16 @@ namespace LazyPainter
 
             UpdateColourBoxes();
 
-            questionStyle = new GUIStyle(GUI.skin.GetStyle("Button"))
+            topButtonStyle = new GUIStyle(GUI.skin.GetStyle("Button"))
             {
-                fontSize = 10,
-                alignment = TextAnchor.MiddleCenter
+                fontSize = 12,
+                alignment = TextAnchor.MiddleCenter,
+                clipping = TextClipping.Overflow
+            };
+
+            questionStyle = new GUIStyle(topButtonStyle)
+            {
+                contentOffset = new Vector2(1, 0)
             };
 
             nonWrappingLabelStyle = new GUIStyle(GUI.skin.button)
@@ -446,12 +491,15 @@ namespace LazyPainter
         {
             for (int i = 0; i < colourTextures.Length; i++)
             {
-                colourTextures[i].SetPixel(0, 0, Colour.HSV255toRGBA(lp.coloursHSV[i], lp.selectionState[i] ? 1f : 0.15f));
+                Color colour = lp.colourData[i].Colour;
+                colour.a = lp.selectionState[i] ? 1f : 0.15f;
+
+                colourTextures[i].SetPixel(0, 0, colour);
                 colourTextures[i].Apply();
             }
         }
 
-        private void SliderSetting(string name, ref float setting, float min, float max, int rounding, ref bool update)
+        private void SliderSetting(string name, ref float setting, float min, float max, ref bool update, float scalar = 1)
         {
             GUILayout.BeginHorizontal();
             GUILayout.Space(3);
@@ -460,12 +508,12 @@ namespace LazyPainter
             float old = setting;
 
             // Slider
-            setting = (float)Math.Round(GUILayout.HorizontalSlider(setting, min, max), rounding);
+            setting = (float)Math.Round(GUILayout.HorizontalSlider(setting, min, max), 3);
 
             // Box
-            string text = GUILayout.TextField(setting.ToString(), textBoxStyle, GUILayout.Width(windowWidth / 8));
+            string text = GUILayout.TextField((setting * scalar).ToString(scalar > 1 ? "N0" : "N2"), textBoxStyle, GUILayout.Width(windowWidth / 8));
             if (float.TryParse(text, out float result))
-                setting = result;
+                setting = (float)Math.Round(result / scalar, 3);
             else if (text == "")
                 setting = 0;
 
@@ -475,7 +523,7 @@ namespace LazyPainter
             GUILayout.EndHorizontal();
         }
 
-        private void DrawPresetSection(ref bool update)
+        private void DrawPresetSection(ref bool update, ref ModalColour editingColour)
         {
             // Group selection.
 
@@ -550,19 +598,12 @@ namespace LazyPainter
                     //}
                     else
                     {
-                        lp.EnableRecolouring(true);
+                        lp.EnableRecolouring(true, false);
 
                         if (groupName == "Custom")
                             presetSaveString = presetColors[i].title;
 
-                        RecoloringData editingColor = presetColors[i].getRecoloringData();
-
-                        lp.coloursHSV[lp.editingColour] = Colour.ColortoHSV255(editingColor.color);
-                        lp.coloursRGB[lp.editingColour] = Colour.HSV255toRGB255(lp.coloursHSV[lp.editingColour]);
-                        lp.speculars[lp.editingColour] = editingColor.specular * 255f;
-                        lp.metals[lp.editingColour] = editingColor.metallic * 255f;
-                        //details[lazyPainter.editingColour] = editingColor.detail * 100f;
-
+                        editingColour = presetColors[i].getRecoloringData();
                         update = true;
                     }
                 }
@@ -608,6 +649,9 @@ namespace LazyPainter
 
         public void AddToolbarButton()
         {
+            if (HighLogic.LoadedSceneIsFlight && !buttonInFlight)
+                return;
+
             if (appLauncherButton != null)
                 return;
 

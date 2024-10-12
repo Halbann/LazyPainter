@@ -54,7 +54,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ClickBlocker.cs" />
-    <Compile Include="Colour.cs" />
+    <Compile Include="GlobalSettings.cs" />
+    <Compile Include="ModalColour.cs" />
     <Compile Include="LazyPainterIMGUI.cs" />
     <Compile Include="Loading.cs" />
     <Compile Include="LazyPainter.cs" />
