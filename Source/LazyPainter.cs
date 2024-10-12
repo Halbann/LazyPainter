@@ -16,22 +16,12 @@ namespace LazyPainter
         #region Fields
 
         // Colour settings.
-        public float[] speculars = { 127, 127, 127 };
-        public float[] metals = { 0, 0, 0 };
-        public float[] details = { 100, 100, 100 };
 
-        public float[][] coloursHSV = new float[][]
+        public ModalColour[] colourData = new ModalColour[]
         {
-            new float[] { 0, 0, 255 },
-            new float[] { 0, 0, 190 },
-            new float[] { 0, 0, 130 },
-        };
-
-        public float[][] coloursRGB = new float[][]
-        {
-            new float[] { 255, 255, 255 },
-            new float[] { 190, 190, 190 },
-            new float[] { 130, 130, 130 },
+            new ModalColour(XKCDColors.PaleGrey, 0.5f, 0, 1f),
+            new ModalColour(XKCDColors.GreyBlue, 0.5f, 0, 1f),
+            new ModalColour(XKCDColors.DarkGrey, 0.5f, 0, 1f)
         };
 
         public bool[] selectionState = new bool[] { true, false, false };
@@ -189,7 +179,7 @@ namespace LazyPainter
 
         public void Cleanup()
         {
-            if (!Ready)
+            if (!Ready || PartsList == null)
                 return;
 
             Highlighter.HighlighterLimit = userHighlighterLimit;
@@ -319,6 +309,19 @@ namespace LazyPainter
             }
         }
 
+        private void ForEachMatchingSection(IEnumerable list, bool findStock, RecoloringData matchColour, Action<RecolourableSection> del)
+        {
+            foreach (RecolourableSection section in list)
+            {
+                bool isStock = !section.RecolouringEnabled;
+                if (!findStock && isStock)
+                    continue;
+
+                if (findStock && isStock || !findStock && section.module.getSectionColors(string.Empty)[0].IsEqual(matchColour))
+                    del(section);
+            }
+        }
+
         private void Selection()
         {
             // todo: throw this all out.
@@ -367,27 +370,18 @@ namespace LazyPainter
             // Control alt click.
             if (modifiers.Equals(true, false, true))
             {
-                RecoloringData[] matchColour = hoveredSection.module.getSectionColors(string.Empty);
+                bool findStock = !hoveredSection.RecolouringEnabled;
+                RecoloringData matchColour = hoveredSection.module.getSectionColors(string.Empty)[0];
 
                 // Control alt click on an already selected part, remove all parts with the same colour.
                 if (selectedSections.Contains(hoveredSection))
                 {
-                    foreach (RecolourableSection section in selectedSections)
-                        if (section.module.getSectionColors(string.Empty)[0].IsEqual(matchColour[0]))
-                            EnqueueDeselect(section);
-
+                    ForEachMatchingSection(selectedSections, findStock, matchColour, EnqueueDeselect);
                     DoDeselect();
                 }
                 // Control alt click on a new part, add all parts with the same colour.
                 else
-                {
-                    foreach (RecolourableSection section in allSections)
-                    {
-                        RecoloringData[] partColour = section.module.getSectionColors(string.Empty);
-                        if (partColour[0].IsEqual(matchColour[0]))
-                            Select(section);
-                    }
-                }
+                    ForEachMatchingSection(allSections, findStock, matchColour, Select);
 
                 UpdateHighlighting();
                 return;
@@ -438,9 +432,7 @@ namespace LazyPainter
                 }
                 // Shift click on a new part, add it to the selection
                 else
-                {
                     Select(hoveredSection);
-                }
 
                 UpdateHighlighting();
                 return;
@@ -457,12 +449,14 @@ namespace LazyPainter
             foreach (RecolourableSection section in allSections)
             {
                 bool enable = selectedSections.Contains(section);
-                section.Glow(enable);
                 section.Highlight(enable);
+
+                if (mouseOverVessel)
+                    section.Glow(enable);
             }
         }
 
-        public void EnableRecolouring(bool enable)
+        public void EnableRecolouring(bool enable, bool apply = true)
         {
             //https://github.com/shadowmage45/TexturesUnlimited/blob/ff1a460262d3aae884fb54fb32e7864b4255531b/Plugin/SSTUTools/KSPShaderTools/GUI/CraftRecolorGUI.cs#L573
             //https://github.com/shadowmage45/TexturesUnlimited/blob/ff1a460262d3aae884fb54fb32e7864b4255531b/Plugin/SSTUTools/KSPShaderTools/Module/KSPTextureSwitch.cs#L124
@@ -483,32 +477,21 @@ namespace LazyPainter
             foreach (RecolourableSection section in selectedSections)
                 section.Enable();
 
-            ApplyRecolouring();
+            if (enable && apply)
+                ApplyRecolouring();
         }
 
         public void ApplyRecolouring()
         {
-            int slot;
+            RecoloringData[] apply = new RecoloringData[colourData.Length];
+            for (int i = 0; i < colourData.Length; i++)
+            {
+                int slot = selectionState[i] ? i : ((i == 2 && selectionState[1]) ? 1 : 0);
+                apply[i] = (RecoloringData)colourData[slot];
+            }
 
             foreach (RecolourableSection section in selectedSections)
-            {
-                if (section == null)
-                    continue;
-
-                RecoloringData[] colours = section.module.getSectionColors(string.Empty);
-
-                for (int i = 0; i < colours.Length; i++)
-                {
-                    slot = selectionState[i] ? i : ((i == 2 && selectionState[1]) ? 1 : 0);
-
-                    colours[i].color = Colour.HSV255toColor(coloursHSV[slot]);
-                    colours[i].metallic = metals[slot] / 255;
-                    colours[i].specular = speculars[slot] / 255;
-                    colours[i].detail = details[slot] / 100;
-                }
-
-                section.module.setSectionColors(string.Empty, colours);
-            }
+                section?.module.setSectionColors(string.Empty, apply);
         }
 
         public void Eyedropper(RecolourableSection section)
@@ -520,12 +503,9 @@ namespace LazyPainter
 
             RecoloringData[] colours = switcher.getSectionColors(string.Empty);
 
-            coloursHSV = colours.Select(c => Colour.ColortoHSV255(c.color)).ToArray();
-            coloursRGB = coloursHSV.Select(c => Colour.HSV255toRGB255(c)).ToArray();
+            for (int i = 0; i < colourData.Length; i++)
+                colourData[i] = colours[i];
 
-            metals = colours.Select(c => c.metallic * 255).ToArray();
-            speculars = colours.Select(c => c.specular * 255).ToArray();
-            details = colours.Select(c => c.detail * 100).ToArray();
             selectionState = new bool[] {
                 true,
                 !colours[0].IsEqual(colours[1]),
@@ -541,22 +521,13 @@ namespace LazyPainter
         {
             section.Highlighter.FlashingOn();
 
-            yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSecondsRealtime(0.5f);
 
             section.Highlighter.FlashingOff();
         }
 
-        public RecoloringDataPreset ExportColourPreset()
-        {
-            RecoloringDataPreset preset = new RecoloringDataPreset
-            {
-                color = Colour.HSV255toColor(coloursHSV[editingColour]),
-                metallic = metals[editingColour] / 255,
-                specular = speculars[editingColour] / 255
-            };
-
-            return preset;
-        }
+        public RecoloringDataPreset ExportColourPreset() =>
+            (RecoloringDataPreset)colourData[editingColour];
 
         public void PrintDebug()
         {

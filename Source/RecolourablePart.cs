@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using static System.Collections.Specialized.BitVector32;
 
 namespace LazyPainter
 {

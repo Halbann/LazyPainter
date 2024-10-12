@@ -121,7 +121,7 @@ namespace LazyPainter
             }
             colourPreset.SetValue("name", preset.name, true);
             colourPreset.SetValue("title", preset.title, true);
-            colourPreset.SetValue("color", String.Join(", ", Colour.ColortoRGB255(preset.color)), true);
+            colourPreset.SetValue("color", String.Join(", ", preset.color.ToRGB255()), true);
             colourPreset.SetValue("metallic", Mathf.RoundToInt(preset.metallic * 255), true);
             colourPreset.SetValue("specular", Mathf.RoundToInt(preset.specular * 255), true);
 
@@ -129,6 +129,18 @@ namespace LazyPainter
                 groupsNode.AddValue("color", preset.name);
 
             file.Save(filePath);
+        }
+    }
+
+    public static class ColorExtensions
+    {
+        public static int[] ToRGB255(this Color color)
+        {
+            return new int[] {
+                Mathf.RoundToInt(color.r * 255),
+                Mathf.RoundToInt(color.g * 255),
+                Mathf.RoundToInt(color.b * 255)
+            };
         }
     }
 }
