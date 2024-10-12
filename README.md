@@ -11,4 +11,4 @@ Check the 'i' menu in the top right of the window for a list of controls. The im
 - Click **'Paint'** to **activate recolouring** for the selected sections.
 - **Right click** a **colour slot** to enable/disable it.
 
-**This mod doesn't provide any recolouring capability by itself. You need Textures Unlimited and your choice of texture sets (usually Textures Unlimited Recolour Depot). **
+**This mod doesn't provide any recolouring capability by itself. You need Textures Unlimited and your choice of texture sets (usually Textures Unlimited Recolour Depot).**
