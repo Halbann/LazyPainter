@@ -473,18 +473,21 @@ namespace LazyPainter
 
             // Find match.
 
-            if (!string.IsNullOrEmpty(hex) && !editingColour.hexValid && hex.FirstOrDefault() != '#' && hex != hexLookupLast)
+            if (hex != hexLookupLast)
             {
-                List<RecoloringDataPreset> matches = PresetColor.getColorList().Where(p => p.title.IndexOf(hex, StringComparison.OrdinalIgnoreCase) == 0).ToList();
-                hexLookupLast = hex;
+                hexLookupMatched = false;
 
-                if (matches.Count == 1)
+                if (!string.IsNullOrEmpty(hex) && !editingColour.hexValid && hex.FirstOrDefault() != '#')
                 {
-                    hexLookupMatch = matches.First();
-                    hexLookupMatched = true;
+                    List<RecoloringDataPreset> matches = PresetColor.getColorList().Where(p => p.title.IndexOf(hex, StringComparison.OrdinalIgnoreCase) == 0).ToList();
+                    hexLookupLast = hex;
+
+                    if (matches.Count == 1)
+                    {
+                        hexLookupMatch = matches.First();
+                        hexLookupMatched = true;
+                    }
                 }
-                else
-                    hexLookupMatched = false;
             }
 
             // Display info.
