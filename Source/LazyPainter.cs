@@ -513,7 +513,10 @@ namespace LazyPainter
             // set all selected to recolourable.
 
             foreach (RecolourableSection section in selectedSections)
-                section.Enable();
+            {
+                if (apply || !section.RecolouringEnabled)
+                    section.Enable();
+            }
 
             if (enable && apply)
                 ApplyRecolouring();

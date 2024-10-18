@@ -5,6 +5,8 @@ namespace LazyPainter
 {
     public struct ModalColour
     {
+        // This could be made extensible to support n colour modes, but it's not worth the time.
+
         public Color Colour
         {
             get => _colour;
@@ -15,6 +17,7 @@ namespace LazyPainter
 
                 _colour = value;
                 hsvDirty = true;
+                hexDirty = true;
             }
         }
 
@@ -36,11 +39,70 @@ namespace LazyPainter
                     return;
 
                 hsvDirty = false;
+                hexDirty = true;
                 _hsv = value;
                 _colour = value.Colour;
             }
         }
 
+        private bool hexDirty;
+        public bool hexValid;
+
+        public string Hex
+        {
+            get
+            {
+                if (!hexDirty)
+                    return _hex;
+
+                hexDirty = false;
+                hexValid = true;
+                return _hex = "#" + ColorUtility.ToHtmlStringRGB(_colour);
+            }
+            set
+            {
+                if (_hex == value)
+                    return;
+
+                _hex = value;
+                hexDirty = false;
+                if (hexValid = TryParseHex(value, out Color colour, out bool correction, out string correctedHex))
+                {
+                    if (correction)
+                        _hex = correctedHex;
+
+                    _colour = colour;
+                    hsvDirty = true;
+                }
+            }
+        }
+
+        private bool TryParseHex(string hex, out Color colour, out bool correction, out string correctedHex)
+        {
+            colour = default;
+            correctedHex = default;
+            correction = false;
+
+            if (string.IsNullOrEmpty(hex))
+                return false;
+
+            if (ColorUtility.TryParseHtmlString(hex, out colour))
+                return true;
+
+            if (hex.Length < 6)
+                return false;
+
+            correctedHex = "#" + hex;
+            if (ColorUtility.TryParseHtmlString(correctedHex, out colour))
+            {
+                correction = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        private string _hex;
         private Color _colour;
         private HSV _hsv;
 
@@ -52,7 +114,10 @@ namespace LazyPainter
         {
             _colour = colour;
             _hsv = default;
+            _hex = default;
+            hexDirty = true;
             hsvDirty = true;
+            hexValid = false;
             this.specular = specular;
             this.metallic = metallic;
             this.detail = detail;

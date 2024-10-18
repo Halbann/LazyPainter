@@ -3,6 +3,7 @@ using KSP.UI.Screens;
 using KSPShaderTools;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
@@ -23,6 +24,14 @@ namespace LazyPainter
         private int windowID;
         public static int windowWidth = 340;
 
+        // Shouldn't have these magic numbers, but can't be bothered. Will do Unity UI version later.
+        // Most of these have to exist because of using GUI.DrawTexture
+        public static float colourSlotWidth = 89;
+        public static float colourSlotSpacing = 16;
+        public static float presetTextFieldWidthConstant = 52;
+        public static float hexStringWidth = 70;
+        public static float centeredLabelHeightConstant = 46;
+
         // Styles.
         private static GUIStyle boxStyle;
         private static GUIStyle questionStyle;
@@ -31,6 +40,7 @@ namespace LazyPainter
         private static GUIStyle buttonStyle;
         private static GUIStyle textBoxStyle;
         private static GUIStyle topButtonStyle;
+        private static GUIStyle centeredLabelStyle;
 
         // Scroll.
         private Vector2 presetColorScrollPos;
@@ -46,9 +56,20 @@ namespace LazyPainter
         private static Texture2D[] colourTextures;
 
         // HSV or RGB.
-        private int colourMode = 0;
-        private string[] colourModes = new string[] { "HSV", "RGB" };
-        private bool UseRGB => colourMode == 1;
+        public enum ColourMode
+        {
+            HSV = 0,
+            RGB = 1,
+            Hex = 2,
+        }
+
+        private ColourMode colourMode = ColourMode.HSV;
+        private string[] colourModes = new string[] { "HSV", "RGB", "Hex" };
+
+        // Hex field preset lookup.
+        private string hexLookupLast = default;
+        private RecoloringDataPreset hexLookupMatch = default;
+        private bool hexLookupMatched = false;
 
         // Preset browser.
         private static int groupIndex = 0;
@@ -185,7 +206,7 @@ namespace LazyPainter
                 Mathf.Clamp(windowRect.position.y, 0, Screen.height - windowRect.height)
             );
 
-            windowRect = GUILayout.Window(windowID, windowRect, FillWindow, windowTitle, GUILayout.Height(1), GUILayout.Width(windowWidth));
+            windowRect = GUILayout.Window(windowID, windowRect, FillWindow, windowTitle, GUILayout.Height(1), GUILayout.Width(windowWidth), GUILayout.MaxWidth(windowWidth));
             clickBlocker.UpdateRect(windowRect);
         }
 
@@ -311,9 +332,6 @@ namespace LazyPainter
             GUILayout.EndHorizontal();
         }
 
-        public static float colourSlotWidth = 89;
-        public static float colourSlotSpacing = 16;
-
         private void MainSection()
         {
             // Selection count.
@@ -382,35 +400,39 @@ namespace LazyPainter
                 GUI.DrawTexture(rect, colourTextures[i], ScaleMode.StretchToFill, true);
             }
 
-
             // Colour slider section.
 
             bool update = false;
 
             GUILayout.BeginHorizontal();
-            GUILayout.Space(100);
-            colourMode = GUILayout.SelectionGrid(colourMode, colourModes, 2);
-            GUILayout.Space(100);
+            GUILayout.FlexibleSpace();
+            colourMode = (ColourMode)GUILayout.SelectionGrid((int)colourMode, colourModes, colourModes.Length);
+            GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
 
             ModalColour editingColour = lp.colourData[lp.editingColour];
             float scalar = display255 ? 255 : 1;
 
-            if (!UseRGB)
+            GUILayout.Space(10);
+            switch (colourMode)
             {
-                HSV hsv = editingColour.HSV;
-                SliderSetting("Hue", ref hsv.hue, 0, 1f, ref update, scalar);
-                SliderSetting("Saturation", ref hsv.saturation, 0, 1f, ref update, scalar);
-                SliderSetting("Value", ref hsv.value, 0, 1f, ref update, scalar);
-                if (update) editingColour.HSV = hsv;
-            }
-            else
-            {
-                Color colour = editingColour.Colour;
-                SliderSetting("Red", ref colour.r, 0, 1f, ref update, scalar);
-                SliderSetting("Green", ref colour.g, 0, 1f, ref update, scalar);
-                SliderSetting("Blue", ref colour.b, 0, 1f, ref update, scalar);
-                if (update) editingColour.Colour = colour;
+                case ColourMode.HSV:
+                    HSV hsv = editingColour.HSV;
+                    SliderSetting("Hue", ref hsv.hue, 0, 1f, ref update, scalar);
+                    SliderSetting("Saturation", ref hsv.saturation, 0, 1f, ref update, scalar);
+                    SliderSetting("Value", ref hsv.value, 0, 1f, ref update, scalar);
+                    if (update) editingColour.HSV = hsv;
+                    break;
+                case ColourMode.RGB:
+                    Color colour = editingColour.Colour;
+                    SliderSetting("Red", ref colour.r, 0, 1f, ref update, scalar);
+                    SliderSetting("Green", ref colour.g, 0, 1f, ref update, scalar);
+                    SliderSetting("Blue", ref colour.b, 0, 1f, ref update, scalar);
+                    if (update) editingColour.Colour = colour;
+                    break;
+                case ColourMode.Hex:
+                    HexInput(ref editingColour, ref update);
+                    break;
             }
 
             // Material slider section.
@@ -433,14 +455,94 @@ namespace LazyPainter
             if (showPresetColours)
                 DrawPresetSection(ref update, ref editingColour);
 
+            lp.colourData[lp.editingColour] = editingColour;
+
             if (update)
             {
-                lp.colourData[lp.editingColour] = editingColour;
                 UpdateColourBoxes();
                 lp.ApplyRecolouring();
             }
 
             GUILayout.EndVertical();
+        }
+
+        private void HexInput(ref ModalColour editingColour, ref bool update)
+        {
+            string hex = editingColour.Hex;
+            string oldHex = hex;
+
+            // Find match.
+
+            if (!string.IsNullOrEmpty(hex) && !editingColour.hexValid && hex.FirstOrDefault() != '#' && hex != hexLookupLast)
+            {
+                List<RecoloringDataPreset> matches = PresetColor.getColorList().Where(p => p.title.IndexOf(hex, StringComparison.OrdinalIgnoreCase) == 0).ToList();
+                hexLookupLast = hex;
+
+                if (matches.Count == 1)
+                {
+                    hexLookupMatch = matches.First();
+                    hexLookupMatched = true;
+                }
+                else
+                    hexLookupMatched = false;
+            }
+
+            // Display info.
+
+            bool applyMatch = false;
+            if (hexLookupMatched)
+            {
+                CenteredLabel($"<color=#cccccc>Press enter for <b>{hexLookupMatch.title}</b>.</color>", centeredLabelHeightConstant);
+
+                if (Event.current.Equals(Event.KeyboardEvent("return")))
+                {
+                    lp.EnableRecolouring(true, false);
+
+                    hex = "#" + ColorUtility.ToHtmlStringRGB(hexLookupMatch.color);
+                    editingColour = hexLookupMatch.getRecoloringData();
+                    update = true;
+                    applyMatch = true;
+                }
+            }
+            else
+            {
+                CenteredLabel($"<color=#b3b3b3>Enter a valid hex code or begin typing\nthe name of a colour preset.</color>", centeredLabelHeightConstant);
+            }
+
+            // Display text field.
+
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+
+            if (!editingColour.hexValid)
+                GUI.color = Color.red;
+
+            Color oldGUIColour = GUI.color;
+
+            hex = GUILayout.TextField(hex, textBoxStyle, GUILayout.MinWidth(70));
+            GUI.color = oldGUIColour;
+
+            if (applyMatch) 
+                try
+                {
+                    TextEditor editor = (TextEditor)GUIUtility.GetStateObject(typeof(TextEditor), GUIUtility.keyboardControl);
+                    editor.selectIndex = hex.Length;
+                    editor.cursorIndex = hex.Length;
+                }
+                catch { }
+
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
+            // Update hex.
+
+            if (!update)
+            {
+                editingColour.Hex = hex;
+
+                if (hex != oldHex && editingColour.hexValid)
+                    update = true;
+            }
         }
 
         private void LoadingScreen()
@@ -454,11 +556,16 @@ namespace LazyPainter
             GUILayout.EndVertical();
         }
 
-        private void CenteredLabel(string text)
+        private void CenteredLabel(string text, float height = 0)
         {
             GUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
-            GUILayout.Label(text);
+
+            if (height == 0)
+                GUILayout.Label(text, centeredLabelStyle);
+            else
+                GUILayout.Label(text, centeredLabelStyle, GUILayout.Height(height));
+
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
         }
@@ -504,6 +611,11 @@ namespace LazyPainter
             buttonStyle = GUI.skin.button;
 
             textBoxStyle = new GUIStyle(GUI.skin.textField)
+            {
+                alignment = TextAnchor.MiddleCenter
+            };
+
+            centeredLabelStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter
             };
@@ -578,7 +690,8 @@ namespace LazyPainter
 
             if (groupName == "Custom")
             {
-                presetSaveString = GUILayout.TextField(presetSaveString);
+                float width = windowWidth - 190 - presetTextFieldWidthConstant;
+                presetSaveString = GUILayout.TextField(presetSaveString, GUILayout.MaxWidth(width));
             }
             else
             {

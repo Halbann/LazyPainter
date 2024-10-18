@@ -89,6 +89,8 @@ namespace LazyPainter
                 group.Add(preset);
             }
 
+            PresetColor.getColorList().Add(preset);
+
             // Serialise the custom preset to a file for the next time the game is loaded.
 
             string kspRoot = KSPUtil.ApplicationRootPath;
