@@ -140,6 +140,7 @@ namespace LazyPainter
                 color = v.Colour,
                 specular = v.specular,
                 metallic = v.metallic,
+                detail = v.detail,
             };
         }
     }
