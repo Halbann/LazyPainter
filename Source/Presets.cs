@@ -126,7 +126,7 @@ namespace LazyPainter
             colourPreset.SetValue("color", String.Join(", ", preset.color.ToRGB255()), true);
             colourPreset.SetValue("metallic", Mathf.RoundToInt(preset.metallic * 255), true);
             colourPreset.SetValue("specular", Mathf.RoundToInt(preset.specular * 255), true);
-            colourPreset.SetValue("detail", Mathf.RoundToInt(preset.detail * 500), true);
+            colourPreset.SetValue("detail", Mathf.RoundToInt(preset.detail * 100), true);
 
             if (!groupsNode.GetValues("color").Contains(preset.name))
                 groupsNode.AddValue("color", preset.name);
