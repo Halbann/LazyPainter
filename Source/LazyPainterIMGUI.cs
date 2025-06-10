@@ -226,6 +226,7 @@ namespace LazyPainter
                 "\n\nClick in empty space to <b>clear</b> the selection. " +
                 "\n\n<b>Alt click</b> a part to <b>copy its colours</b> to the palette. " +
                 "\n\nClick <b>'Paint'</b> to <b>activate recolouring</b> for the selected sections. " +
+                "\n\nClick <b>'Paint'</b> again to cycle between <b>paint masks</b> for the selected sections. " +
                 "\n\n<b>Right click</b> a <b>colour slot</b> to enable/disable it.");
             GUILayout.EndHorizontal();
             GUILayout.EndHorizontal();

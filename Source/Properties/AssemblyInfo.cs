@@ -19,7 +19,7 @@ using System.Runtime.InteropServices;
 // COM, set the ComVisible attribute to true on that type.
 [assembly: ComVisible(false)]
 
-[assembly: KSPAssemblyDependency("TexturesUnlimited", 1, 6)]
+[assembly: KSPAssemblyDependency("TexturesUnlimited", 1, 6, 3)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
 //[assembly: Guid("c0bde81c-46ff-40a1-b3a1-07e40830115c")]
