@@ -289,10 +289,35 @@ namespace LazyPainter
 
             // Main section or loading screen.
             if (lp.Ready)
-                if (!LazyPainter.noRecolourableTextureSetsDetected)
+            {
+                bool noWarnings = true;
+
+                if (LazyPainter.noRecolourableTextureSetsDetected)
+                {
+                    noWarnings = false;
+                    Warn("<b><color=red>Warning</color>: No recolourable texture sets loaded." +
+                    $"\nYou should probably download the Stock set from Textures Unlimited Recolour Depot.</b>");
+                    DownloadButton("Textures Unlimited Recolour Depot", @"https://forum.kerbalspaceprogram.com/topic/174188-112x-textures-unlimited-recolour-depot/");
+                }
+
+                if (!LazyPainter.texturesUnlimitedLoaded)
+                {
+                    noWarnings = false;
+                    Warn("<b><color=red>Warning</color>: Textures Unlimited isn't loaded." +
+                    $"\nHow are you even seeing this?</b>");
+                    DownloadButton("KSPModStewards/TexturesUnlimited", @"https://github.com/KSPModStewards/TexturesUnlimited/releases");
+                }
+                else if (!LazyPainter.texturesUnlimitedCorrectVersion)
+                {
+                    noWarnings = false;
+                    Warn("<b><color=red>Warning</color>: Outdated version of Textures Unlimited." +
+                    $"\nPlease download the latest version from KSPModStewards or via CKAN.</b>");
+                    DownloadButton("KSPModStewards/TexturesUnlimited", @"https://github.com/KSPModStewards/TexturesUnlimited/releases");
+                }
+
+                if (noWarnings)
                     MainSection();
-                else
-                    Warning();
+            }
             else
                 LoadingScreen();
 
@@ -320,15 +345,21 @@ namespace LazyPainter
             }
         }
 
-        private void Warning()
+        private void Warn(string warningString)
         {
             GUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
-
-            string warningString = "<b><color=red>Warning</color>: No recolourable texture sets loaded." +
-            $"\nAre you missing 'Textures Unlimited Recolour Depot'?</b>";
             GUILayout.Label(warningString, boxStyle);
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+        }
 
+        private void DownloadButton(string name, string url)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button($"Visit {name}"))
+                Application.OpenURL(url);
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
         }

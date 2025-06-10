@@ -46,6 +46,9 @@ namespace LazyPainter
         public static bool noRecolourableTextureSetsDetected = (TexturesUnlimitedLoader.loadedTextureSets?.Count ?? 0) < 1
             || !TexturesUnlimitedLoader.loadedTextureSets.Any(s => s.Value.supportsRecoloring);
 
+        public static bool texturesUnlimitedLoaded = false;
+        public static bool texturesUnlimitedCorrectVersion = false;
+
         private List<Part> PartsList => HighLogic.LoadedSceneIsEditor ? EditorLogic.fetch.ship.parts : FlightGlobals.ActiveVessel.Parts;
 
         public Dictionary<Part, RecolourablePart> allRecolourables = new Dictionary<Part, RecolourablePart>();
@@ -81,6 +84,41 @@ namespace LazyPainter
 
             if (!PresetColor.getGroupList().Exists(x => x.name == "Custom"))
                 Presets.AddCustomGroup();
+
+            CheckForTexturesUnlimited();
+        }
+
+        private void CheckForTexturesUnlimited()
+        {
+            var dependency = new KSPAssemblyDependency("TexturesUnlimited", 1, 6, 3);
+            AssemblyLoader.LoadedAssembly tuAssembly = null;
+
+            foreach (var loadedAssembly in AssemblyLoader.loadedAssemblies)
+            {
+                if (loadedAssembly.name == "TexturesUnlimited")
+                {
+                    tuAssembly = loadedAssembly;
+                    texturesUnlimitedLoaded = true;
+
+                    if ((loadedAssembly.versionMajor > dependency.versionMajor) || (loadedAssembly.versionMajor == dependency.versionMajor && (loadedAssembly.versionMinor > dependency.versionMinor || (loadedAssembly.versionMinor == dependency.versionMinor && loadedAssembly.versionRevision >= dependency.versionRevision))))
+                    {
+                        texturesUnlimitedCorrectVersion = true;
+                        return;
+                    }
+                }
+            }
+
+            string tuURL = @"https://github.com/KSPModStewards/TexturesUnlimited/releases";
+
+            if (texturesUnlimitedLoaded)
+            {
+                string requiredVersion = $"{dependency.versionMajor}.{dependency.versionMinor}.{dependency.versionRevision}";
+                string currentVersion = $"{tuAssembly.versionMajor}.{tuAssembly.versionMinor}.{tuAssembly.versionRevision}";
+
+                Debug.LogError($"[LazyPainter]: TexturesUnlimited version {requiredVersion} or higher is required, but version {currentVersion} is loaded. Please update TexturesUnlimited to the latest version from {tuURL}.");
+            }
+            else
+                Debug.LogError($"[LazyPainter]: TexturesUnlimited not found. Please install TexturesUnlimited from {tuURL}.");
         }
 
         protected void Update()
