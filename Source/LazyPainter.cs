@@ -92,7 +92,7 @@ namespace LazyPainter
 
         private void CheckForTexturesUnlimited()
         {
-            var dependency = new KSPAssemblyDependency("TexturesUnlimited", 1, 6, 3);
+            var dependency = new KSPAssemblyDependency("TexturesUnlimited", 1, 6, 4);
             AssemblyLoader.LoadedAssembly tuAssembly = null;
 
             foreach (var loadedAssembly in AssemblyLoader.loadedAssemblies)
