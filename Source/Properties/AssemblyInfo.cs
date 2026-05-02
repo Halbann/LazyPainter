@@ -19,7 +19,9 @@ using System.Runtime.InteropServices;
 // COM, set the ComVisible attribute to true on that type.
 [assembly: ComVisible(false)]
 
-//[assembly: KSPAssemblyDependency("TexturesUnlimited", 1, 6, 3)]
+// 0,0,0 because we handle version mismatch with a warning and a link.
+// ...but actually remove the KSP Dep because if KSP never loads it, KSPCF never displays a dependency warning, and I prefer that.
+//[assembly: KSPAssemblyDependency("TexturesUnlimited", 0, 0, 0)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
 //[assembly: Guid("c0bde81c-46ff-40a1-b3a1-07e40830115c")]
