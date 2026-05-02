@@ -129,7 +129,7 @@ namespace LazyPainter
                 return;
 
             Selection();
-            MouseOverVessel(Mouse.HoveredPart != null);
+            MouseOverVessel(Mouse.HoveredPart != null && !imgui.MouseOverUI());
         }
 
         private void MouseOverVessel(bool over)
