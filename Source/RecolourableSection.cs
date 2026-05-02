@@ -33,7 +33,9 @@ namespace LazyPainter
         public RecolourablePart host;
         public TextureSetInfo textureInfo;
         public Highlighter _highlighter;
-        public bool glowing = false;
+        private float lastGlowStrength;
+        private bool glowing;
+        public Color glowColour = Color.white;
         public Highlighter Highlighter => host.simple ? host.part.highlighter : _highlighter;
         public static float rimFallOff = 1.5f;
 
@@ -49,15 +51,17 @@ namespace LazyPainter
             action(this);
         }
 
-        public void Glow(bool enable)
+        public void Glow(float alpha)
         {
-            if (glowing == enable)
+            if (!glowing && !(alpha > 0f) || Mathf.Approximately(alpha, lastGlowStrength))
                 return;
 
+            lastGlowStrength = alpha;
+            glowing = alpha > 0f;
+            glowColour.a = alpha;
             MaterialPropertyBlock mpb = host.part.mpb;
-            glowing = enable;
+            mpb.SetColor(PropertyIDs._RimColor, glowColour);
             mpb.SetFloat(PropertyIDs._RimFalloff, rimFallOff);
-            mpb.SetColor(PropertyIDs._RimColor, enable ? Color.white : Color.clear);
 
             IList<Renderer> highlightRenderers;
             if (host.simple)

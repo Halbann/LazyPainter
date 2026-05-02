@@ -40,7 +40,9 @@ namespace LazyPainter
         private bool userInflightHighlight;
 
         public LazyPainterIMGUI imgui;
-        private bool mouseOverVessel = false;
+        private float lastMouseOverVesselTime = 0;
+        private float fadeGlowDuration = 0.5f;
+        private float fadeGlowAfterSeconds = 1.0f; // How long 
         private float lastClickTime = 0;
 
         public static bool noRecolourableTextureSetsDetected = (TexturesUnlimitedLoader.loadedTextureSets?.Count ?? 0) < 1
@@ -132,13 +134,13 @@ namespace LazyPainter
 
         private void MouseOverVessel(bool over)
         {
-            if (mouseOverVessel == over)
-                return;
+            if (over)
+                lastMouseOverVesselTime = Time.realtimeSinceStartup;
 
-            mouseOverVessel = over;
+            float glow = 1f - Mathf.InverseLerp(fadeGlowAfterSeconds, fadeGlowDuration + fadeGlowAfterSeconds, Time.realtimeSinceStartup - lastMouseOverVesselTime);
 
             foreach (RecolourableSection section in selectedSections)
-                section.Glow(over);
+                section.Glow(glow);
         }
 
         protected void OnDestroy()
@@ -311,6 +313,7 @@ namespace LazyPainter
             foreach (RecolourablePart recolPart in allRecolourables.Values)
                 selectedSections.UnionWith(recolPart.sections);
 
+            lastMouseOverVesselTime = Time.realtimeSinceStartup;
             UpdateHighlighting();
         }
 
@@ -526,9 +529,7 @@ namespace LazyPainter
             {
                 bool enable = selectedSections.Contains(section);
                 section.Highlight(enable);
-
-                if (mouseOverVessel)
-                    section.Glow(enable);
+                if (!enable) section.Glow(0f);
             }
         }
 
