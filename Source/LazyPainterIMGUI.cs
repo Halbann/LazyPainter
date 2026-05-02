@@ -266,7 +266,7 @@ namespace LazyPainter
             }
 
             // Close button.
-            if (GUI.Button(new Rect(windowRect.width - 18, 2, 16, 16), "x", topButtonStyle))
+            if (GUI.Button(new Rect(windowRect.width - 18, 2, 16, 16), "x", topButtonStyle) || Input.GetKeyDown(KeyCode.Escape))
                 Close();
 
             // Style initialisation.
