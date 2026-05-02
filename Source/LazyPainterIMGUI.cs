@@ -113,7 +113,7 @@ namespace LazyPainter
 
         protected void Update()
         {
-            if (HighLogic.LoadedSceneIsFlight && GameSettings.PAUSE.GetKeyUp())
+            if (GameSettings.PAUSE.GetKeyUp())
                 Close();
         }
 
@@ -266,7 +266,7 @@ namespace LazyPainter
             }
 
             // Close button.
-            if (GUI.Button(new Rect(windowRect.width - 18, 2, 16, 16), "x", topButtonStyle) || Input.GetKeyDown(KeyCode.Escape))
+            if (GUI.Button(new Rect(windowRect.width - 18, 2, 16, 16), "x", topButtonStyle))
                 Close();
 
             // Style initialisation.
