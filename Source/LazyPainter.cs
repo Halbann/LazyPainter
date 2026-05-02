@@ -291,13 +291,13 @@ namespace LazyPainter
 
         private void KinematicRigidbodies(bool enable)
         {
-            foreach (Part part in PartsList)
-                if (part.rb)
-                {
-                    part.rb.isKinematic = enable;
-                    if (!enable)
-                        part.rb.velocity = previousRbVelocity;
-                }
+            //foreach (Part part in PartsList)
+            //    if (part.rb)
+            //    {
+            //        part.rb.isKinematic = enable;
+            //        if (!enable)
+            //            part.rb.velocity = previousRbVelocity;
+            //    }
 
             previousRbVelocity = FlightGlobals.ActiveVessel.rb_velocity;
         }
