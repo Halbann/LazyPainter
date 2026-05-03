@@ -20,7 +20,7 @@ namespace LazyPainter
 
             float nextFrameTime = Time.realtimeSinceStartup + minFrameTime;
 
-            Stack<IEnumerator> enumerators = new Stack<IEnumerator>();
+            Stack<IEnumerator> enumerators = new ();
             enumerators.Push(coroutine);
 
             while (enumerators.TryPop(out IEnumerator currentEnumerator))

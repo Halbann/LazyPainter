@@ -15,7 +15,7 @@ namespace LazyPainter
         public SSTURecolorGUI SSTURecolorGUI
         {
             private set => _SSTURecolorGUI = value;
-            get => _SSTURecolorGUI ?? (_SSTURecolorGUI = part.FindModuleImplementing<SSTURecolorGUI>());
+            get => _SSTURecolorGUI ??= part.FindModuleImplementing<SSTURecolorGUI>();
         }
 
         private SSTURecolorGUI _SSTURecolorGUI;
@@ -34,9 +34,7 @@ namespace LazyPainter
                 if (!RecolourableSection.FindRecolourableTexturesets(part, recolour, out RecolourableSection.TextureSetInfo setInfo))
                     continue;
 
-                if (newSections == null)
-                    newSections = new List<RecolourableSection.CreationInfo>();
-
+                newSections ??= [];
                 newSections.Add(new RecolourableSection.CreationInfo { part = part, module = recolour, setInfo = setInfo });
             }
 
@@ -61,7 +59,7 @@ namespace LazyPainter
                 foreach (Collider collider in stockColliders)
                     collider.enabled = false;
 
-                table = new Dictionary<Transform, RecolourableSection>();
+                table = [];
             }
 
             bool prune = false;

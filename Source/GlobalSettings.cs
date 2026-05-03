@@ -45,7 +45,7 @@ namespace LazyPainter
             public object defaultValue;
         }
 
-        private static readonly Dictionary<string, CategoryInfo> categories = new Dictionary<string, CategoryInfo>();
+        private static readonly Dictionary<string, CategoryInfo> categories = [];
         private static bool locatedFields = false;
 
         protected void Start()
@@ -73,7 +73,7 @@ namespace LazyPainter
                         {
                             name = attribute.category,
                             displayName = attribute.displayName,
-                            settings = new Dictionary<string, SettingInfo>()
+                            settings = []
                         };
 
                         categories.Add(attribute.category, categoryInfo);
@@ -109,7 +109,7 @@ namespace LazyPainter
             if (!Directory.Exists(PluginData))
                 Directory.CreateDirectory(PluginData);
 
-            ConfigNode settingsNode = new ConfigNode(nameof(GlobalSettings));
+            ConfigNode settingsNode = new (nameof(GlobalSettings));
             settingsNode.AddValue("version", settingsVersion);
             ConfigNode categoryNode;
 
@@ -123,7 +123,7 @@ namespace LazyPainter
                 settingsNode.AddNode(categoryNode);
             }
 
-            ConfigNode file = new ConfigNode();
+            ConfigNode file = new ();
             file.AddNode(settingsNode);
             file.Save(Config);
         }
@@ -172,8 +172,8 @@ namespace LazyPainter
             {
                 // TryGetValue has a million overloads and I can't be bothered writing a huge switch statement.
 
-                parameters = new object[] { field.Name, null };
-                method = typeof(ConfigNode).GetMethod("TryGetValue", new Type[] { typeof(string), type.MakeByRefType() });
+                parameters = [field.Name, null];
+                method = typeof(ConfigNode).GetMethod("TryGetValue", [typeof(string), type.MakeByRefType()]);
                 if (method == null)
                     return false;
 

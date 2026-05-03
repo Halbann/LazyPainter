@@ -157,10 +157,29 @@ namespace LazyPainter
         public Color Colour =>
             Color.HSVToRGB(hue, saturation, value);
 
-        public static bool operator ==(HSV a, HSV b) =>
-            a.hue == b.hue && a.saturation == b.saturation && a.value == b.value;
+        public static bool operator ==(HSV a, HSV b)
+        {
+             return Mathf.Approximately(a.hue, b.hue)
+                && Mathf.Approximately(a.saturation, b.saturation)
+                && Mathf.Approximately(a.value, b.value);
+        }
 
         public static bool operator !=(HSV a, HSV b) =>
             !(a == b);
+
+        public override bool Equals(object obj) =>
+            obj is HSV other && this == other;
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hash = 17;
+                hash = hash * 31 + hue.GetHashCode();
+                hash = hash * 31 + saturation.GetHashCode();
+                hash = hash * 31 + value.GetHashCode();
+                return hash;
+            }
+        }
     }
 }

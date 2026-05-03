@@ -3,7 +3,6 @@ using KSP.UI.Screens;
 using KSPShaderTools;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
@@ -20,7 +19,7 @@ namespace LazyPainter
         private ApplicationLauncherButton appLauncherButton;
 
         // Window.
-        private static Rect windowRect = new Rect(Screen.width * 0.04f, Screen.height * 0.1f, 0, 0);
+        private static Rect windowRect = new (Screen.width * 0.04f, Screen.height * 0.1f, 0, 0);
         private int windowID;
         public static int windowWidth = 340;
 
@@ -64,7 +63,7 @@ namespace LazyPainter
         }
 
         private ColourMode colourMode = ColourMode.HSV;
-        private string[] colourModes = new string[] { "HSV", "RGB", "Hex" };
+        private readonly string[] colourModes = ["HSV", "RGB", "Hex"];
 
         // Hex field preset lookup.
         private string hexLookupLast = default;
@@ -177,9 +176,6 @@ namespace LazyPainter
             appLauncherButton?.gameObject.SetActive(data == EditorScreen.Parts);
 
         private void OnEditorRestart() =>
-            Close();
-
-        private void OnSceneChange(GameScenes data) =>
             Close();
 
         private void OnUIChanged(bool enabled)
@@ -403,7 +399,7 @@ namespace LazyPainter
             GUILayout.BeginVertical(boxStyle);
 
             int oldEditingColour = lp.editingColour;
-            string[] disabledStrings = new string[] { "", "", "" };
+            string[] disabledStrings = ["", "", ""];
             lp.editingColour = GUILayout.SelectionGrid(lp.editingColour, disabledStrings, 3, GUILayout.Height(50));
 
             if (GUI.changed && lp.editingColour != 0)
@@ -428,7 +424,7 @@ namespace LazyPainter
 
             for (int i = 0; i < 3; i++)
             {
-                Rect rect = new Rect(horizontalOffset + (i * (colourSlotSpacing + colourSlotWidth)), verticalOffset, colourSlotWidth, colourHeight);
+                Rect rect = new (horizontalOffset + (i * (colourSlotSpacing + colourSlotWidth)), verticalOffset, colourSlotWidth, colourHeight);
                 GUI.DrawTexture(rect, colourTextures[i], ScaleMode.StretchToFill, true);
             }
 
@@ -509,14 +505,24 @@ namespace LazyPainter
             {
                 hexLookupMatched = false;
 
-                if (!string.IsNullOrEmpty(hex) && !editingColour.hexValid && hex.FirstOrDefault() != '#')
+                if (!string.IsNullOrWhiteSpace(hex) && !editingColour.hexValid && hex[0] != '#')
                 {
-                    List<RecoloringDataPreset> matches = PresetColor.getColorList().Where(p => p.title.IndexOf(hex, StringComparison.OrdinalIgnoreCase) == 0).ToList();
+                    int matchCount = 0;
+                    RecoloringDataPreset lookupMatch = default;
+                    foreach (var match in PresetColor.getColorList())
+                    {
+                        if (match.title.IndexOf(hex, StringComparison.OrdinalIgnoreCase) == 0)
+                        {
+                            if (++matchCount > 1) break;
+                            lookupMatch = match;
+                        }
+                    }
+
                     hexLookupLast = hex;
 
-                    if (matches.Count == 1)
+                    if (matchCount == 1)
                     {
-                        hexLookupMatch = matches.First();
+                        hexLookupMatch = lookupMatch;
                         hexLookupMatched = true;
                     }
                 }
@@ -609,12 +615,12 @@ namespace LazyPainter
         {
             boxStyle = GUI.skin.GetStyle("Box");
 
-            colourTextures = new Texture2D[]
-            {
-                new Texture2D(1, 1, TextureFormat.RGBA32, false),
-                new Texture2D(1, 1, TextureFormat.RGBA32, false),
-                new Texture2D(1, 1, TextureFormat.RGBA32, false),
-            };
+            colourTextures =
+            [
+                new (1, 1, TextureFormat.RGBA32, false),
+                new (1, 1, TextureFormat.RGBA32, false),
+                new (1, 1, TextureFormat.RGBA32, false),
+            ];
 
             UpdateColourBoxes();
 
@@ -746,7 +752,7 @@ namespace LazyPainter
 
             presetColorScrollPos = GUILayout.BeginScrollView(presetColorScrollPos, false, true, GUILayout.Height(200f));
             Color old = GUI.color;
-            Color guiColor = old;
+            Color guiColor;
             List<RecoloringDataPreset> presetColors = PresetColor.getColorList(groupName);
 
             GUILayout.BeginHorizontal();

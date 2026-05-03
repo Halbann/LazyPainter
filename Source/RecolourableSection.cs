@@ -209,7 +209,7 @@ namespace LazyPainter
             // Go through the materials for each set and find the transforms based on the mesh names in the material.
             // I'm pretty sure this is the only way to find out which sections act on which meshes/transforms.
 
-            HashSet<Transform> allTextureSetTransforms = new HashSet<Transform>();
+            HashSet<Transform> allTextureSetTransforms = [];
 
             foreach (TextureSet set in sets)
             {
@@ -272,7 +272,7 @@ namespace LazyPainter
                     return null;
             }
 
-            GameObject go = new GameObject("LazyPainterMeshCollider");
+            GameObject go = new ("LazyPainterMeshCollider");
             go.transform.SetParent(parent, false);
 
             MeshCollider collider = go.AddComponent<MeshCollider>();
@@ -280,7 +280,7 @@ namespace LazyPainter
 
             if (skinned != null)
             {
-                Mesh bakedMesh = new Mesh();
+                Mesh bakedMesh = new ();
                 collider.sharedMesh = bakedMesh;
                 skinned.BakeMesh(bakedMesh);
                 Vector3 s = parent.transform.lossyScale;
@@ -299,7 +299,7 @@ namespace LazyPainter
             Highlighter highlighter = transforms[0].gameObject.AddComponent<Highlighter>();
 
             // Find renderers.
-            List<Renderer> renderers = new List<Renderer>();
+            List<Renderer> renderers = [];
             foreach (Transform transform in transforms)
             {
                 foreach (Type type in Highlighter.types)
@@ -317,11 +317,11 @@ namespace LazyPainter
             }
 
             // Cache renderers.
-            highlighter.highlightableRenderers = new List<Highlighter.RendererCache>();
+            highlighter.highlightableRenderers = [];
             int count = renderers.Count;
             for (int i = 0; i < count; i++)
             {
-                Highlighter.RendererCache item = new Highlighter.RendererCache(renderers[i], highlighter.opaqueMaterial, highlighter.zTestFloat, highlighter.stencilRefFloat);
+                Highlighter.RendererCache item = new (renderers[i], highlighter.opaqueMaterial, highlighter.zTestFloat, highlighter.stencilRefFloat);
                 highlighter.highlightableRenderers.Add(item);
             }
 

@@ -13,8 +13,8 @@ namespace LazyPainter
     {
         public static void AddCustomGroup()
         {
-            RecoloringDataPresetGroup customGroup = new RecoloringDataPresetGroup("Custom");
-            customGroup.colors = new List<RecoloringDataPreset>();
+            RecoloringDataPresetGroup customGroup = new ("Custom");
+            customGroup.colors = [];
             PresetColor.getGroupList().Add(customGroup);
 
             FieldInfo groupsField = typeof(PresetColor).GetField("presetGroups", BindingFlags.Static | BindingFlags.NonPublic);
@@ -59,7 +59,7 @@ namespace LazyPainter
 
             file.RemoveNode(colourPreset);
 
-            int index = groupsNode.GetValues().ToList().FindIndex(n => n == preset.name);
+            int index = Array.FindIndex(groupsNode.GetValues(), n => n == preset.name);
             if (index != -1)
                 groupsNode.values.Remove(groupsNode.values[index]);
 
@@ -139,11 +139,11 @@ namespace LazyPainter
     {
         public static int[] ToRGB255(this Color color)
         {
-            return new int[] {
+            return [
                 Mathf.RoundToInt(color.r * 255),
                 Mathf.RoundToInt(color.g * 255),
                 Mathf.RoundToInt(color.b * 255)
-            };
+            ];
         }
     }
 }

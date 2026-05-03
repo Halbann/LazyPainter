@@ -28,7 +28,7 @@ namespace LazyPainter
 
         public static ClickBlocker Create(Canvas canvas, string owner)
         {
-            GameObject blocker = new GameObject(owner + "ClickBlocker");
+            GameObject blocker = new (owner + "ClickBlocker");
             ClickBlocker clickBlocker = blocker.AddComponent<ClickBlocker>();
 
             blocker.transform.SetParent(canvas.transform);

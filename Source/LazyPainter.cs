@@ -17,14 +17,14 @@ namespace LazyPainter
 
         // Colour settings.
 
-        public ModalColour[] colourData = new ModalColour[]
-        {
-            new ModalColour(XKCDColors.PaleGrey, 0.5f, 0, 1f),
-            new ModalColour(XKCDColors.GreyBlue, 0.5f, 0, 1f),
-            new ModalColour(XKCDColors.DarkGrey, 0.5f, 0, 1f)
-        };
+        public ModalColour[] colourData =
+        [
+            new (XKCDColors.PaleGrey, 0.5f, 0, 1f),
+            new (XKCDColors.GreyBlue, 0.5f, 0, 1f),
+            new (XKCDColors.DarkGrey, 0.5f, 0, 1f)
+        ];
 
-        public bool[] selectionState = new bool[] { true, false, false };
+        public bool[] selectionState = [true, false, false];
         public int editingColour = 0;
 
         // Parts.
@@ -41,8 +41,8 @@ namespace LazyPainter
 
         public LazyPainterIMGUI imgui;
         private float lastMouseOverVesselTime = 0;
-        private float fadeGlowDuration = 0.5f;
-        private float fadeGlowAfterSeconds = 1.0f; // How long 
+        public float fadeGlowDuration = 0.5f;
+        public float fadeGlowAfterSeconds = 1.0f; // How long 
         private float lastClickTime = 0;
 
         public static bool noRecolourableTextureSetsDetected = (TexturesUnlimitedLoader.loadedTextureSets?.Count ?? 0) < 1
@@ -53,10 +53,10 @@ namespace LazyPainter
 
         private List<Part> PartsList => HighLogic.LoadedSceneIsEditor ? EditorLogic.fetch.ship.parts : FlightGlobals.ActiveVessel.Parts;
 
-        public Dictionary<Part, RecolourablePart> allRecolourables = new Dictionary<Part, RecolourablePart>();
-        public HashSet<RecolourableSection> allSections = new HashSet<RecolourableSection>();
-        public readonly HashSet<RecolourableSection> selectedSections = new HashSet<RecolourableSection>();
-        public readonly HashSet<RecolourableSection> deselectionQueue = new HashSet<RecolourableSection>();
+        public Dictionary<Part, RecolourablePart> allRecolourables = [];
+        public HashSet<RecolourableSection> allSections = [];
+        public readonly HashSet<RecolourableSection> selectedSections = [];
+        public readonly HashSet<RecolourableSection> deselectionQueue = [];
 
         public static ControlTypes controlLock =
             ControlTypes.EDITOR_PAD_PICK_PLACE
@@ -340,10 +340,12 @@ namespace LazyPainter
 
             public static ModifierState Current()
             {
-                ModifierState state = new ModifierState();
-                state.ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-                state.shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-                state.alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+                ModifierState state = new ()
+                {
+                    ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl),
+                    shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift),
+                    alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)
+                };
 
                 return state;
             }
@@ -586,11 +588,11 @@ namespace LazyPainter
             for (int i = 0; i < colourData.Length; i++)
                 colourData[i] = colours[i];
 
-            selectionState = new bool[] {
+            selectionState = [
                 true,
                 !colours[0].IsEqual(colours[1]),
                 !colours[1].IsEqual(colours[1]) && !colours[0].IsEqual(colours[2])
-            };
+            ];
 
             StartCoroutine(FlashSection(section));
             imgui.Refresh();
