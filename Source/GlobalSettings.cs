@@ -24,7 +24,7 @@ namespace LazyPainter
     internal class GlobalSettings : MonoBehaviour
     {
         private static string PluginData =>
-            Path.Combine(KSPUtil.ApplicationRootPath, "GameData", Meta.name, "PluginData");
+            Path.Combine(KSPUtil.ApplicationRootPath, "GameData", "LazyPainter", "PluginData");
 
         private static string Config =>
             Path.Combine(PluginData, "settings.cfg");
