@@ -333,6 +333,24 @@ public class LazyPainter : MonoBehaviour
         deselectionQueue.Clear();
     }
 
+    private void FillSelect(Part root)
+    {
+        Stack<Part> stack = new ();
+        stack.Push(root);
+
+        while (stack.Count > 0)
+        {
+            Part part = stack.Pop();
+
+            if (allRecolourables.TryGetValue(part, out RecolourablePart recolPart))
+                foreach (RecolourableSection section in recolPart.sections)
+                    Select(section);
+
+            foreach (Part child in part.children)
+                stack.Push(child);
+        }
+    }
+
     private struct ModifierState
     {
         public bool ctrl;
@@ -395,6 +413,13 @@ public class LazyPainter : MonoBehaviour
                 UpdateHighlighting();
             }
 
+            return;
+        }
+
+        if (modifiers.Equals(false, true, true))
+        {
+            FillSelect(hoveredPart);
+            UpdateHighlighting();
             return;
         }
 
