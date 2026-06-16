@@ -7,143 +7,142 @@ using System.Reflection;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
-namespace LazyPainter
+namespace LazyPainter;
+
+public static class Presets
 {
-    public static class Presets
+    public static void AddCustomGroup()
     {
-        public static void AddCustomGroup()
-        {
-            RecoloringDataPresetGroup customGroup = new ("Custom");
-            customGroup.colors = [];
-            PresetColor.getGroupList().Add(customGroup);
+        RecoloringDataPresetGroup customGroup = new ("Custom");
+        customGroup.colors = [];
+        PresetColor.getGroupList().Add(customGroup);
 
-            FieldInfo groupsField = typeof(PresetColor).GetField("presetGroups", BindingFlags.Static | BindingFlags.NonPublic);
-            Dictionary<string, RecoloringDataPresetGroup> presetGroups = (Dictionary<string, RecoloringDataPresetGroup>)groupsField.GetValue(null);
-            presetGroups.Add("Custom", customGroup);
-        }
-
-        public static void DeletePreset(int customIndex)
-        {
-            // Remove from custom group.
-
-            RecoloringDataPresetGroup customGroup = PresetColor.getGroupList().Find(g => g.name == "Custom");
-            if (customGroup == null)
-                return;
-
-            RecoloringDataPreset preset = customGroup.colors[customIndex];
-            customGroup.colors.RemoveAt(customIndex);
-
-            // Remove from file.
-
-            string kspRoot = KSPUtil.ApplicationRootPath;
-            string modPath = Path.Combine(kspRoot, "GameData", "LazyPainter");
-            string filePath = Path.Combine(modPath, "customColours" + ".cfg");
-
-            ConfigNode file;
-
-            Debug.Log("Delete Colour: " + preset.name);
-
-            if (File.Exists(filePath))
-                file = ConfigNode.Load(filePath);
-            else
-                return;
-
-            ConfigNode[] groups = file.GetNodes("PRESET_COLOR_GROUP");
-            ConfigNode groupsNode = groups.FirstOrDefault(g => g.GetValue("name") == "Custom");
-            if (groupsNode == null)
-                return;
-
-            ConfigNode colourPreset = file.GetNodes("KSP_COLOR_PRESET").FirstOrDefault(n => n.GetValue("name") == preset.name);
-            if (colourPreset == null)
-                return;
-
-            file.RemoveNode(colourPreset);
-
-            int index = Array.FindIndex(groupsNode.GetValues(), n => n == preset.name);
-            if (index != -1)
-                groupsNode.values.Remove(groupsNode.values[index]);
-
-            file.Save(filePath);
-        }
-
-        public static void SaveColour(string name, RecoloringDataPreset preset)
-        {
-            // Add the custom colour to the preset group.
-
-            preset.title = name;
-            preset.name = preset.title.Replace(" ", "").ToLower();
-
-            RecoloringDataPresetGroup customGroup = PresetColor.getGroupList().Find(g => g.name == "Custom");
-
-            if (customGroup == null)
-                AddCustomGroup();
-
-            List<RecoloringDataPreset> group = customGroup.colors;
-            int index;
-            if ((index = group.FindIndex(p => p.name == preset.name)) != -1)
-            {
-                group[index] = preset;
-            }
-            else
-            {
-                group.Add(preset);
-            }
-
-            PresetColor.getColorList().Add(preset);
-
-            // Serialise the custom preset to a file for the next time the game is loaded.
-
-            string kspRoot = KSPUtil.ApplicationRootPath;
-            string modPath = Path.Combine(kspRoot, "GameData", "LazyPainter");
-            string filePath = Path.Combine(modPath, "customColours" + ".cfg");
-
-            ConfigNode file;
-
-            Debug.Log("SaveColour: " + name);
-
-            if (File.Exists(filePath))
-                file = ConfigNode.Load(filePath);
-            else
-                file = new ConfigNode();
-
-            ConfigNode[] groups = file.GetNodes("PRESET_COLOR_GROUP");
-            ConfigNode groupsNode = groups.FirstOrDefault(g => g.GetValue("name") == "Custom");
-            if (groupsNode == null)
-            {
-                groupsNode = new ConfigNode("PRESET_COLOR_GROUP");
-                file.AddNode(groupsNode);
-                groupsNode.SetValue("name", "Custom", true);
-            }
-
-            ConfigNode colourPreset = file.GetNodes("KSP_COLOR_PRESET").FirstOrDefault(n => n.GetValue("name") == preset.name);
-            if (colourPreset == null)
-            {
-                colourPreset = new ConfigNode("KSP_COLOR_PRESET");
-                file.AddNode(colourPreset);
-            }
-            colourPreset.SetValue("name", preset.name, true);
-            colourPreset.SetValue("title", preset.title, true);
-            colourPreset.SetValue("color", String.Join(", ", preset.color.ToRGB255()), true);
-            colourPreset.SetValue("metallic", Mathf.RoundToInt(preset.metallic * 255), true);
-            colourPreset.SetValue("specular", Mathf.RoundToInt(preset.specular * 255), true);
-            colourPreset.SetValue("detail", Mathf.RoundToInt(preset.detail * 100), true);
-
-            if (!groupsNode.GetValues("color").Contains(preset.name))
-                groupsNode.AddValue("color", preset.name);
-
-            file.Save(filePath);
-        }
+        FieldInfo groupsField = typeof(PresetColor).GetField("presetGroups", BindingFlags.Static | BindingFlags.NonPublic);
+        Dictionary<string, RecoloringDataPresetGroup> presetGroups = (Dictionary<string, RecoloringDataPresetGroup>)groupsField.GetValue(null);
+        presetGroups.Add("Custom", customGroup);
     }
 
-    public static class ColorExtensions
+    public static void DeletePreset(int customIndex)
     {
-        public static int[] ToRGB255(this Color color)
+        // Remove from custom group.
+
+        RecoloringDataPresetGroup customGroup = PresetColor.getGroupList().Find(g => g.name == "Custom");
+        if (customGroup == null)
+            return;
+
+        RecoloringDataPreset preset = customGroup.colors[customIndex];
+        customGroup.colors.RemoveAt(customIndex);
+
+        // Remove from file.
+
+        string kspRoot = KSPUtil.ApplicationRootPath;
+        string modPath = Path.Combine(kspRoot, "GameData", "LazyPainter");
+        string filePath = Path.Combine(modPath, "customColours" + ".cfg");
+
+        ConfigNode file;
+
+        Debug.Log("Delete Colour: " + preset.name);
+
+        if (File.Exists(filePath))
+            file = ConfigNode.Load(filePath);
+        else
+            return;
+
+        ConfigNode[] groups = file.GetNodes("PRESET_COLOR_GROUP");
+        ConfigNode groupsNode = groups.FirstOrDefault(g => g.GetValue("name") == "Custom");
+        if (groupsNode == null)
+            return;
+
+        ConfigNode colourPreset = file.GetNodes("KSP_COLOR_PRESET").FirstOrDefault(n => n.GetValue("name") == preset.name);
+        if (colourPreset == null)
+            return;
+
+        file.RemoveNode(colourPreset);
+
+        int index = Array.FindIndex(groupsNode.GetValues(), n => n == preset.name);
+        if (index != -1)
+            groupsNode.values.Remove(groupsNode.values[index]);
+
+        file.Save(filePath);
+    }
+
+    public static void SaveColour(string name, RecoloringDataPreset preset)
+    {
+        // Add the custom colour to the preset group.
+
+        preset.title = name;
+        preset.name = preset.title.Replace(" ", "").ToLower();
+
+        RecoloringDataPresetGroup customGroup = PresetColor.getGroupList().Find(g => g.name == "Custom");
+
+        if (customGroup == null)
+            AddCustomGroup();
+
+        List<RecoloringDataPreset> group = customGroup.colors;
+        int index;
+        if ((index = group.FindIndex(p => p.name == preset.name)) != -1)
         {
-            return [
-                Mathf.RoundToInt(color.r * 255),
-                Mathf.RoundToInt(color.g * 255),
-                Mathf.RoundToInt(color.b * 255)
-            ];
+            group[index] = preset;
         }
+        else
+        {
+            group.Add(preset);
+        }
+
+        PresetColor.getColorList().Add(preset);
+
+        // Serialise the custom preset to a file for the next time the game is loaded.
+
+        string kspRoot = KSPUtil.ApplicationRootPath;
+        string modPath = Path.Combine(kspRoot, "GameData", "LazyPainter");
+        string filePath = Path.Combine(modPath, "customColours" + ".cfg");
+
+        ConfigNode file;
+
+        Debug.Log("SaveColour: " + name);
+
+        if (File.Exists(filePath))
+            file = ConfigNode.Load(filePath);
+        else
+            file = new ConfigNode();
+
+        ConfigNode[] groups = file.GetNodes("PRESET_COLOR_GROUP");
+        ConfigNode groupsNode = groups.FirstOrDefault(g => g.GetValue("name") == "Custom");
+        if (groupsNode == null)
+        {
+            groupsNode = new ConfigNode("PRESET_COLOR_GROUP");
+            file.AddNode(groupsNode);
+            groupsNode.SetValue("name", "Custom", true);
+        }
+
+        ConfigNode colourPreset = file.GetNodes("KSP_COLOR_PRESET").FirstOrDefault(n => n.GetValue("name") == preset.name);
+        if (colourPreset == null)
+        {
+            colourPreset = new ConfigNode("KSP_COLOR_PRESET");
+            file.AddNode(colourPreset);
+        }
+        colourPreset.SetValue("name", preset.name, true);
+        colourPreset.SetValue("title", preset.title, true);
+        colourPreset.SetValue("color", String.Join(", ", preset.color.ToRGB255()), true);
+        colourPreset.SetValue("metallic", Mathf.RoundToInt(preset.metallic * 255), true);
+        colourPreset.SetValue("specular", Mathf.RoundToInt(preset.specular * 255), true);
+        colourPreset.SetValue("detail", Mathf.RoundToInt(preset.detail * 100), true);
+
+        if (!groupsNode.GetValues("color").Contains(preset.name))
+            groupsNode.AddValue("color", preset.name);
+
+        file.Save(filePath);
+    }
+}
+
+public static class ColorExtensions
+{
+    public static int[] ToRGB255(this Color color)
+    {
+        return [
+            Mathf.RoundToInt(color.r * 255),
+            Mathf.RoundToInt(color.g * 255),
+            Mathf.RoundToInt(color.b * 255)
+        ];
     }
 }

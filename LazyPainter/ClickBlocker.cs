@@ -1,47 +1,46 @@
 ﻿using UnityEngine;
 
-namespace LazyPainter
+namespace LazyPainter;
+
+class ClickBlocker : MonoBehaviour
 {
-    class ClickBlocker : MonoBehaviour
+    public RectTransform rect;
+
+    public bool Blocking
     {
-        public RectTransform rect;
+        get => gameObject.activeSelf;
+        set => gameObject.SetActive(value);
+    }
 
-        public bool Blocking
+    public void UpdateRect(Rect windowRect)
+    {
+        if (rect != null)
         {
-            get => gameObject.activeSelf;
-            set => gameObject.SetActive(value);
+            rect.sizeDelta = new Vector2(windowRect.width, windowRect.height);
+            rect.anchoredPosition = new Vector2(windowRect.x - 0.5f * Screen.width, 0.5f * Screen.height - windowRect.y);
         }
+    }
 
-        public void UpdateRect(Rect windowRect)
-        {
-            if (rect != null)
-            {
-                rect.sizeDelta = new Vector2(windowRect.width, windowRect.height);
-                rect.anchoredPosition = new Vector2(windowRect.x - 0.5f * Screen.width, 0.5f * Screen.height - windowRect.y);
-            }
-        }
+    protected void OnDestroy()
+    {
+        Destroy(gameObject);
+    }
 
-        protected void OnDestroy()
-        {
-            Destroy(gameObject);
-        }
+    public static ClickBlocker Create(Canvas canvas, string owner)
+    {
+        GameObject blocker = new (owner + "ClickBlocker");
+        ClickBlocker clickBlocker = blocker.AddComponent<ClickBlocker>();
 
-        public static ClickBlocker Create(Canvas canvas, string owner)
-        {
-            GameObject blocker = new (owner + "ClickBlocker");
-            ClickBlocker clickBlocker = blocker.AddComponent<ClickBlocker>();
+        blocker.transform.SetParent(canvas.transform);
 
-            blocker.transform.SetParent(canvas.transform);
+        RectTransform rect = blocker.AddComponent<RectTransform>();
+        rect.pivot = new Vector2(0f, 1f);
+        clickBlocker.rect = rect;
 
-            RectTransform rect = blocker.AddComponent<RectTransform>();
-            rect.pivot = new Vector2(0f, 1f);
-            clickBlocker.rect = rect;
+        blocker.AddComponent<CanvasRenderer>();
+        blocker.AddComponent<UnityEngine.UI.Text>();
+        blocker.SetActive(false);
 
-            blocker.AddComponent<CanvasRenderer>();
-            blocker.AddComponent<UnityEngine.UI.Text>();
-            blocker.SetActive(false);
-
-            return clickBlocker;
-        }
+        return clickBlocker;
     }
 }
