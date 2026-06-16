@@ -1,12 +1,13 @@
-using Highlighting;
-using KSPShaderTools;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using Debug = UnityEngine.Debug;
+using Highlighting;
+using KSPShaderTools;
 
 namespace LazyPainter
 {
@@ -379,7 +380,7 @@ namespace LazyPainter
                 return;
             }
 
-            if (!Input.GetMouseButtonUp(0) || imgui.MouseOverUI())
+            if (!Input.GetMouseButtonUp(0) || imgui.MouseOverUI() || EventSystem.current.IsPointerOverGameObject())
                 return;
 
             ModifierState modifiers = ModifierState.Current();
