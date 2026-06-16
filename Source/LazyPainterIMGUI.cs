@@ -79,8 +79,8 @@ namespace LazyPainter
         private string deleteTitle;
 
         // Serialised settings.
-        [Setting] public static bool display255 = true;
-        [Setting] public static bool buttonInFlight = true;
+        public static readonly Setting<bool> display255 = true;
+        public static readonly Setting<bool> buttonInFlight = true;
 
         public static LazyPainterIMGUI Create(LazyPainter lazyPainter)
         {
@@ -231,8 +231,8 @@ namespace LazyPainter
         private void SettingsSection()
         {
             GUILayout.BeginVertical(boxStyle);
-            display255 = GUILayout.Toggle(display255, "Display values from 0 to 255.");
-            buttonInFlight = GUILayout.Toggle(buttonInFlight, "Show app button in flight (after next scene load).");
+            display255.Value = GUILayout.Toggle(display255, "Display values from 0 to 255.");
+            buttonInFlight.Value = GUILayout.Toggle(buttonInFlight, "Show app button in flight (after next scene load).");
             GUILayout.EndVertical();
         }
 
