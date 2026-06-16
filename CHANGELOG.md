@@ -1,5 +1,3 @@
-# Changelog
-
 ## 0.5.0
 
 ### Selection
@@ -8,9 +6,10 @@
 - Clicking on stock UI no longer selects the part behind it.
 
 ### UI
-- Selected parts now fade out their glow when the mouse leaves the vessel, rather than switching off instantly.
-- Fixed selected parts glowing when the mouse is over the Lazy Painter window and the window is in front of the vessel.
+- Clicking a part that needs a recolour mod that you don't have installed now offers a download link.
+- The glow on selected parts now fades out slowly when the mouse is no longer over the vessel, rather than instantly.
 - The pause key (Esc by default) now closes Lazy Painter in the editor as well as in flight.
+- Fixed selected parts glowing when the mouse was over the Lazy Painter window and the vessel at the same time.
 
 ### Flight
 - Added a difficulty setting to disable painting in flight.

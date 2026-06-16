@@ -1,0 +1,52 @@
+[
+    {
+        "modRoot": "ReStock/",
+        "name": "Restock Recolour",
+        "CKAN": "",
+        "URL": "https://spacedock.info/mod/3748/Restock%20Recolour"
+    },
+    {
+        "modRoot": "SquadExpansion/MakingHistory/",
+        "name": "Making History Recolour",
+        "CKAN": "TURD-MakingHistory",
+        "URL": "https://github.com/KerbalPowers/TURD-MH-BG/releases"
+    },
+    {
+        "modRoot": "SquadExpansion/Serenity/",
+        "name": "Breaking Ground Recolour",
+        "CKAN": "TURD-BreakingGround",
+        "URL": "https://github.com/KerbalPowers/TURD-MH-BG/releases"
+    },
+    {
+        "modRoot": "Squad/",
+        "name": "Stock Recolour",
+        "CKAN": "TURD-StockRecolour",
+        "URL": "https://github.com/KerbalPowers/TURD-StockRecolour/releases"
+    },
+    {
+        "modRoot": "KerbalFoundries/",
+        "name": "Kerbal Foundries Recolour",
+        "CKAN": "TURD-KerbalFoundries",
+        "URL": "https://github.com/KerbalPowers/TURD-KerbalFoundries/releases"
+    },
+    {
+        "modRoot": "BDArmory/",
+        "name": "BD Armory Recolour",
+        "CKAN": "TURD-BDArmory",
+        "URL": "https://github.com/KerbalPowers/TURD-BDArmory/releases"
+    },
+    {
+        "modRoot": [
+            "NAS/",
+            "BDArmoryExtended/",
+            "BDArmoryRefurbished/",
+            "KerbalPowers/Armory/",
+            "Wraithforge/",
+            "AviatorArsenal/",
+            "KerbalField/"
+        ],
+        "name": "BDA Associated Recolour",
+        "CKAN": "TURD-BDArmory",
+        "URL": "https://github.com/KerbalPowers/TURD-BDArmory/releases"
+    }
+]

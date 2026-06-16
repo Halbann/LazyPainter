@@ -428,6 +428,7 @@ public class LazyPainter : MonoBehaviour
 
         if (!allRecolourables.TryGetValue(hoveredPart, out RecolourablePart hoveredRecolourablePart))
         {
+            InstallHelper.Instance.WhyPartNotRecolourable(hoveredPart);
             StartCoroutine(CoFlashPartHighlightInOut(hoveredPart, Color.red, 1f / 3f, 1f / 3f, 3f));
             return;
         }
