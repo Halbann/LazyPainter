@@ -399,7 +399,10 @@ namespace LazyPainter
             }
 
             if (!allRecolourables.TryGetValue(hoveredPart, out RecolourablePart hoveredRecolourablePart))
+            {
+                StartCoroutine(CoFlashPartHighlightInOut(hoveredPart, Color.red, 1f / 3f, 1f / 3f, 3f));
                 return;
+            }
 
             hoveredRecolourablePart.GetSection(out RecolourableSection hoveredSection);
             if (hoveredSection == null)
@@ -618,6 +621,44 @@ namespace LazyPainter
             allSections.GroupBy(s => s.code).OrderBy(g => g.Count()).ToList().ForEach(g => Debug.Log($"{g.Key}: {g.Count()}"));
         }
 
+        private IEnumerator CoFlashPartHighlightInOut(Part part, Color color, float duration, float fadeDuration, float freqHz)
+        {
+            float t = 0f;
+            float start = Time.realtimeSinceStartup;
+            var h = part.highlighter;
+            h.ConstantOnImmediate();
+            MaterialPropertyBlock mpb = part.mpb;
+
+            while (t < fadeDuration * 2 + duration)
+            {
+                t = Time.realtimeSinceStartup - start;
+
+                float a = FadeInOut(t, fadeDuration, duration);
+                a *= 0.5f - Mathf.Cos(t * Mathf.PI * 2f * freqHz) * 0.5f;
+                color.a = a;
+
+                h.constantColor = color;
+                mpb.SetColor(PropertyIDs._RimColor, color);
+                foreach (var r in part.highlightRenderer) r.SetPropertyBlock(mpb);
+
+                yield return null;
+            }
+
+            h.ConstantOffImmediate();
+        }
+
+        private float FadeInOut(float t, float fadeDuration, float duration)
+        {
+            if (t < 0f) return 0f;
+            // Fade in.
+            //if (t < fadeDuration) return t / fadeDuration;
+            // Hold.
+            if (t < fadeDuration + duration) return 1f;
+            // Fade out.
+            if (t < fadeDuration * 2f + duration) return 1f - (t - fadeDuration - duration) / fadeDuration;
+
+            return 0f;
+        }
         #endregion
     }
 }
