@@ -7,6 +7,8 @@ namespace LazyPainter
     {
         // This could be made extensible to support n colour modes, but it's not worth the time.
 
+        // todo: HSL https://gist.github.com/UweKeim/fb7f829b852c209557bc49c51ba14c8b
+
         public Color Colour
         {
             get => _colour;
