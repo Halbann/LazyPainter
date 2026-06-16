@@ -129,6 +129,9 @@ public class LazyPainter : MonoBehaviour
         if (!Ready)
             return;
 
+        if (HighLogic.LoadedSceneIsFlight && !LazyPainterSaveSettings.AllowFlightPainting)
+            return;
+
         Selection();
         MouseOverVessel(Mouse.HoveredPart != null && !imgui.MouseOverUI());
     }

@@ -103,6 +103,7 @@ public class LazyPainterIMGUI : MonoBehaviour
         GameEvents.onEditorScreenChange.Add(OnEditorScreenChange);
         GameEvents.onEditorRestart.Add(OnEditorRestart);
         GameEvents.onEditorScreenChange.Add(OnEditorScreenChange);
+        GameEvents.OnGameSettingsApplied.Add(OnGameSettingsApplied);
 
         Version version = Assembly.GetExecutingAssembly().GetName().Version;
         windowTitle = $"Lazy Painter v{version.Major}.{version.Minor}.{version.Build}";
@@ -157,6 +158,7 @@ public class LazyPainterIMGUI : MonoBehaviour
         GameEvents.onEditorScreenChange.Remove(OnEditorScreenChange);
         GameEvents.onEditorRestart.Remove(OnEditorRestart);
         GameEvents.onEditorScreenChange.Remove(OnEditorScreenChange);
+        GameEvents.OnGameSettingsApplied.Remove(OnGameSettingsApplied);
 
         InputLockManager.RemoveControlLock("LazyPainterScrollLock");
 
@@ -830,7 +832,7 @@ public class LazyPainterIMGUI : MonoBehaviour
 
     public void AddToolbarButton()
     {
-        if (HighLogic.LoadedSceneIsFlight && !buttonInFlight)
+        if (HighLogic.LoadedSceneIsFlight && (!buttonInFlight || !LazyPainterSaveSettings.AllowFlightPainting))
             return;
 
         if (appLauncherButton != null)
@@ -839,5 +841,25 @@ public class LazyPainterIMGUI : MonoBehaviour
         ApplicationLauncher.AppScenes scenes = ApplicationLauncher.AppScenes.SPH | ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.FLIGHT;
         Texture buttonTexture = GameDatabase.Instance.GetTexture("LazyPainter/Textures/icon", false);
         appLauncherButton = ApplicationLauncher.Instance.AddModApplication(Open, Close, null, null, null, null, scenes, buttonTexture);
+    }
+
+    public void RemoveToolbarButton()
+    {
+        if (appLauncherButton == null)
+            return;
+
+        ApplicationLauncher.Instance.RemoveModApplication(appLauncherButton);
+        appLauncherButton = null;
+    }
+
+    private void OnGameSettingsApplied()
+    {
+        if (HighLogic.LoadedSceneIsFlight && !LazyPainterSaveSettings.AllowFlightPainting)
+        {
+            Close();
+            RemoveToolbarButton();
+        }
+        else
+            AddToolbarButton();
     }
 }
