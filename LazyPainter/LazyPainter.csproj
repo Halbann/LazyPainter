@@ -48,6 +48,7 @@
 	<Target Name="CopyTextFiles" AfterTargets="Build" BeforeTargets="CopyToGame">
 		<Copy SourceFiles="$(RepoRoot)README.md" DestinationFiles="$(KSPBT_ModRoot)Readme.txt" />
 		<Copy SourceFiles="$(RepoRoot)LICENSE.md" DestinationFiles="$(KSPBT_ModRoot)License.txt" />
+		<Copy SourceFiles="$(RepoRoot)CHANGELOG.md" DestinationFiles="$(KSPBT_ModRoot)Changelog.txt" />
 	</Target>
 	<!-- Copy mod folder to game -->
 	<Target Name="CopyToGame" AfterTargets="Build">
