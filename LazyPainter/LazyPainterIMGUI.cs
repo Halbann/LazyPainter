@@ -95,7 +95,6 @@ public class LazyPainterIMGUI : MonoBehaviour
     private void Init()
     {
         AddToolbarButton();
-        windowID = GUIUtility.GetControlID(FocusType.Passive);
 
         if (clickBlocker == null)
             clickBlocker = ClickBlocker.Create(UIMasterController.Instance.mainCanvas, nameof(LazyPainter));
@@ -119,6 +118,9 @@ public class LazyPainterIMGUI : MonoBehaviour
 
     protected void OnGUI()
     {
+        if (windowID == 0)
+            windowID = GUIUtility.GetControlID(FocusType.Passive);
+
         if (UIMasterController.Instance.IsUIShowing)
             DrawGUI();
     }
