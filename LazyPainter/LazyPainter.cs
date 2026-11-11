@@ -55,6 +55,7 @@ public class LazyPainter : MonoBehaviour
     private List<Part> PartsList => HighLogic.LoadedSceneIsEditor ? EditorLogic.fetch.ship.parts : FlightGlobals.ActiveVessel.Parts;
 
     public Dictionary<Part, RecolourablePart> allRecolourables = [];
+    private int allRecolourablesCapacity;
     public HashSet<RecolourableSection> allSections = [];
     public readonly HashSet<RecolourableSection> selectedSections = [];
     public readonly HashSet<RecolourableSection> deselectionQueue = [];
@@ -195,13 +196,12 @@ public class LazyPainter : MonoBehaviour
         int total = PartsList.Count;
         int capacity = PartsList.Count;
 
-        // get dictionary count via reflection
-        FieldInfo entriesField = typeof(Dictionary<Part, RecolourablePart>).GetField("entries", BindingFlags.NonPublic | BindingFlags.Instance);
-        int entries = ((ICollection)entriesField.GetValue(allRecolourables))?.Count ?? 0;
-
         // Pre-allocate dictionary if it's too small.
-        if (entries < capacity)
+        if (allRecolourablesCapacity < capacity)
+        {
             allRecolourables = new Dictionary<Part, RecolourablePart>(capacity);
+            allRecolourablesCapacity = capacity;
+        }
 
         foreach (Part part in PartsList)
         {

@@ -4,7 +4,7 @@
 		<RootNamespace>LazyPainter</RootNamespace>
 		<AssemblyName>LazyPainter</AssemblyName>
 		<TargetFramework>net48</TargetFramework>
-		<Version>0.5.0.0</Version>
+		<Version>0.5.0.1</Version>
 		<LangVersion>latest</LangVersion>
 		<Copyright>Copyright © Halban 2026, CC BY SA</Copyright>
 	</PropertyGroup>

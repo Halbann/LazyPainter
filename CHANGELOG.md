@@ -17,4 +17,4 @@
 
 ### Other
 - Textures Unlimited 1.6.4 or newer is now required.
-- Fixed the UI being stuck on the loading screen on KSP Retooled.
+- Fixed the UI being stuck on loading and a part setup error on KSP Retooled.
